@@ -133,8 +133,9 @@ jobs:
           # 安装 BOS SDK
           python3 -m pip install bce-python-sdk==0.9.29
           
-          # 下载上传工具
+          # 下载上传工具并保存绝对路径
           wget -q https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
+          BOS_TOOL=$(realpath bos_tools.py)
           
           # 确定上传路径
           if [ "${{ steps.version.outputs.is_tag }}" == "true" ]; then
@@ -149,7 +150,7 @@ jobs:
           cd Paddle-iluvatar/Paddle/build/python/dist/
           for whl_file in *.whl; do
             echo "Uploading: ${whl_file}"
-            python3 ../../../../bos_tools.py "${whl_file}" "${WHL_PACKAGE}"
+            python3 "${BOS_TOOL}" "${whl_file}" "${WHL_PACKAGE}"
           done
           
           echo "Upload completed!"
