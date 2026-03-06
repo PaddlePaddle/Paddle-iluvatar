@@ -110,7 +110,7 @@ jobs:
           export PYTHON_VERSION=${{ env.PYTHON_VERSION }}
           export COREX_ARCH=${{ env.COREX_ARCH }}
           export BUILD_TEST=${{ env.BUILD_TEST }}
-          
+          apt-get install -y patchelf
           cd Paddle-iluvatar
           bash build_paddle.sh
           
