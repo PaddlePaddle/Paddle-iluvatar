@@ -139,9 +139,9 @@ jobs:
           
           # 确定上传路径
           if [ "${{ steps.version.outputs.is_tag }}" == "true" ]; then
-            WHL_PACKAGE="paddle-whl/stable/ixuca/paddle-iluvatar"
+            WHL_PACKAGE="paddle-whl/stable/ixuca/paddlepaddle-iluvatar"
           else
-            WHL_PACKAGE="paddle-whl/nightly/ixuca/paddle-iluvatar"
+            WHL_PACKAGE="paddle-whl/nightly/ixuca/paddlepaddle-iluvatar"
           fi
           
           echo "Uploading to: $WHL_PACKAGE"
