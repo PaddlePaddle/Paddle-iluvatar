@@ -16,12 +16,13 @@
 
 TARGET_DIR=${TARGET_DIR:-}
 
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 PYTHON_PATH=$(which python3)
 PYTHON_DIST_PATH=${TARGET_DIR}/lib/python3/dist-packages
 
-PKG_DIR="build_pip"
+PKG_DIR="${SCRIPT_DIR}/Paddle/build/python/dist"
 PKGCPU_NAME="paddlepaddle"
-PKG_NAME="paddle_iluvatar_gpu"
+PKG_NAME="paddlepaddle_iluvatar"
 
 if [[ ! -d ${PKG_DIR} ]]; then
   echo "ERROR: Package directory ${PKG_DIR} doesn't exist"
@@ -44,9 +45,7 @@ if [[ "${TARGET_DIR}" != ""  ]]; then
   rm -rf ./tmp
   echo "Paddle installed in ${PYTHON_DIST_PATH}; please add it to your PYTHONPATH."
 else
-  # ${PYTHON_PATH} -m pip uninstall ${PKGCPU_NAME} -y
-  # ${PYTHON_PATH} -m pip install  --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-  ${PYTHON_PATH} -m pip uninstall ${PKG_NAME} -y
+  ${PYTHON_PATH} -m pip uninstall paddlepaddle-iluvatar -y 2>/dev/null || true
   ${PYTHON_PATH} -m pip install ${PKG_DIR}/${latest_pkg} || exit
 fi
 

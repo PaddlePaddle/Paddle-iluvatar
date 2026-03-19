@@ -10,19 +10,18 @@ English | [简体中文](./README_cn.md)
 # 请联系天数智芯客户支持 (services@iluvatar.com) 获取 SDK 镜像
 
 # 克隆 PaddleCustomDevice 源代码
-git clone https://github.com/PaddlePaddle/Paddle_Iluvatar.git
+git clone https://github.com/PaddlePaddle/Paddle-iluvatar.git
 
 bash build_paddle.sh
 
 # 安装
-pip install Paddle/build/python/dist/paddlepaddle*
+bash install_paddle.sh
 ```
 
 ## 增量编译（代码修改后更快地重新编译）
 ```bash
 # 增量编译（代码修改后更快地重新编译，也会安装 whl 包）
-cd Paddle/build
-ninja -j$(nproc)
+bash build_inc.sh
 ```
 
 ## 验证

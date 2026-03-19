@@ -109,15 +109,21 @@ cmake -G Ninja "${PADDLE_CMAKE_ARGS[@]}" "${PADDLE_SOURCE_DIR}" \
   || { echo "Error: CMake configuration failed!"; exit 1; }
 
 if [[ "${PLATFORM_ID}" == "aarch64" ]]; then
-  env TARGET=ARMV8 ninja -j$(nproc) || { echo "Error: Paddle build failed!"; exit 1; }
+  env TARGET=ARMV8 ninja -j$(nproc) 2>&1 | tee compile.log
 else
-  ninja -j$(nproc) || { echo "Error: Paddle build failed!"; exit 1; }
+  ninja -j$(nproc) 2>&1 | tee compile.log
 fi
+[[ ${PIPESTATUS[0]} -eq 0 ]] || { echo "Error: Paddle build failed!"; exit 1; }
 popd
 
 if git -C "$PADDLE_SOURCE_DIR" apply --reverse --check "$PATCH_FILE" > /dev/null 2>&1; then
   git -C "$PADDLE_SOURCE_DIR" apply --reverse "$PATCH_FILE" || { echo "Error: Failed to revert patch!"; exit 1; }
   echo "Patch successfully reverted!"
+fi
+
+_warpctc="${PADDLE_SOURCE_DIR}/third_party/warpctc"
+if [[ -d "${_warpctc}/.git" ]] || git -C "${_warpctc}" rev-parse --is-inside-work-tree &>/dev/null; then
+  git -C "${_warpctc}" reset --hard &>/dev/null && echo "Restored Paddle/third_party/warpctc" || true
 fi
 
 pushd ${PADDLE_SOURCE_DIR}/third_party/eigen3
