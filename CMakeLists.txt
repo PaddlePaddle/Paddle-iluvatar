@@ -125,10 +125,17 @@ add_definitions(-std=c++17)
 option(WITH_TESTING "compile with unit testing" OFF)
 option(ON_INFER "compile with inference c++ lib" OFF)
 option(WITH_GPU "Compile PaddlePaddle with ILUVATAR_GPU" ON)
+option(WITH_CINN "Compile with CINN support" ON)
 
 set(WITH_GPU ON)
 
 include(cuda)
+
+if(WITH_CINN)
+  message(STATUS "[Iluvatar] CINN enabled, adding subdirectory: cinn")
+  add_definitions(-DWITH_CINN)
+  add_subdirectory(cinn)
+endif()
 
 file(
   GLOB
@@ -871,6 +878,11 @@ target_include_directories(
   PRIVATE ${PADDLE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}
           ${CMAKE_CURRENT_SOURCE_DIR}/kernels ${CUDA_INCLUDE_DIRS})
 
+if(WITH_CINN)
+  target_include_directories(${TARGET_NAME}
+                             PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/cinn")
+endif()
+
 target_link_libraries(
   ${TARGET_NAME}
   PRIVATE glog
@@ -892,6 +904,12 @@ target_link_libraries(
 
 if(TARGET phi_core)
   target_link_libraries(${TARGET_NAME} PRIVATE phi_core)
+endif()
+
+if(WITH_CINN)
+  message(STATUS "[Iluvatar] Linking CINN object library")
+  target_link_libraries(${TARGET_NAME}
+                        PRIVATE $<TARGET_OBJECTS:iluvatar_cinn_obj>)
 endif()
 
 include_directories(BEFORE ${PADDLE_SOURCE_DIR})
