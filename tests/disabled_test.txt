@@ -523,7 +523,6 @@ test_vander.py
 test_variable_length_memory_efficient_attention.py
 test_variance_layer.py
 test_version.py
-test_warpctc_op.py
 test_warprnnt_op.py
 test_weight_decay.py
 test_weighted_sample_neighbors.py

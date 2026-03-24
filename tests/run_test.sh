@@ -59,20 +59,10 @@ revert_corex_patch() {
 
 trap revert_corex_patch EXIT
 
-# export PATH=/usr/local/corex/bin:$PATH
 export LD_LIBRARY_PATH=/usr/local/corex/lib:${LD_LIBRARY_PATH}
-# export LIBRARY_PATH=/usr/local/corex/lib
 export PYTHONPATH="${LEGACY_TEST_PATH}:${PYTHONPATH}"
 
 python -m pip install parameterized
-
-# if [[ -z "${LD_LIBRARY_PATH:-}" ]]; then
-#     echo "ERROR: LD_LIBRARY_PATH is not set!" >&2
-#     exit 1
-# elif [[ ! -f "${LD_LIBRARY_PATH}/libcuda.so.1" ]]; then
-#     echo "ERROR: libcuda.so.1 not found in LD_LIBRARY_PATH!" >&2
-#     exit 1
-# fi
 
 NUM_GPUS=$(ixsmi --query-gpu=name --format=csv,noheader | wc -l)
 if [ "$NUM_GPUS" -eq 0 ]; then
@@ -83,7 +73,6 @@ LAST_GPU=$((NUM_GPUS - 1))
 echo "Using last GPU: $LAST_GPU"
 export CUDA_VISIBLE_DEVICES=$LAST_GPU
 
-# export LD_PRELOAD="${LD_LIBRARY_PATH}/libcuda.so.1"
 export FLAG_SKIP_FLOAT64=1
 
 apply_corex_patch || exit 1

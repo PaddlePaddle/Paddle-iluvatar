@@ -1,3 +1,41 @@
+diff --git a/cmake/external/warpctc.cmake b/cmake/external/warpctc.cmake
+index 17ef70b4a0..e70bd507b3 100644
+--- a/cmake/external/warpctc.cmake
++++ b/cmake/external/warpctc.cmake
+@@ -56,6 +56,11 @@ if(WITH_ROCM)
+       -p1 < ${PADDLE_SOURCE_DIR}/patches/warpctc/hip.cmake.patch)
+ endif()
+ 
++
++set(WARPCTC_ILUVATAR_PATCH
++    "${CUSTOM_DEVICE_SOURCE_DIR}/patches/warpctc-corex.patch")
++message(STATUS "warpctc: Iluvatar patch at PATCH step: ${WARPCTC_ILUVATAR_PATCH}")
++
+ set(WARPCTC_INCLUDE_DIR
+     "${WARPCTC_INSTALL_DIR}/include"
+     CACHE PATH "Warp-ctc Directory" FORCE)
+@@ -121,6 +126,9 @@ ExternalProject_Add(
+   COMMAND ${WARPCTC_PATCH_COMMAND}
+   COMMAND ${WARPCTC_PATCH_CUDA_COMMAND}
+   COMMAND ${WARPCTC_PATCH_ROCM_COMMAND}
++  COMMAND ${CMAKE_COMMAND} -E echo "warpctc: applying Iluvatar warpctc-corex.patch..."
++  COMMAND patch -p1 -i "${WARPCTC_ILUVATAR_PATCH}"
++  COMMAND ${CMAKE_COMMAND} -E echo "warpctc: Iluvatar warpctc-corex.patch applied successfully."
+   #BUILD_ALWAYS    1
+   CMAKE_ARGS -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+              -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+@@ -131,9 +139,9 @@ ExternalProject_Add(
+              -DCMAKE_CXX_FLAGS_RELEASE=${WARPCTC_CXX_FLAGS_RELEASE}
+              -DCMAKE_CXX_FLAGS_DEBUG=${WARPCTC_CXX_FLAGS_DEBUG}
+              -DCMAKE_INSTALL_PREFIX=${WARPCTC_INSTALL_DIR}
+-             -DWITH_GPU=${WITH_GPU}
++             -DWITH_GPU=ON
+              -DWITH_ROCM=${WITH_ROCM}
+-             -DWITH_OMP=${USE_OMP}
++             -DWITH_OMP=OFF
+              -DNVCC_FLAGS_EXTRA=${NVCC_FLAGS_EXTRA}
+              -DWITH_TORCH=OFF
+              -DCMAKE_DISABLE_FIND_PACKAGE_Torch=ON
 diff --git a/paddle/fluid/operators/collective/recv_v2_op.cu.cc b/paddle/fluid/operators/collective/recv_v2_op.cu.cc
 index 8fa6b3ae60..f63217421f 100644
 --- a/paddle/fluid/operators/collective/recv_v2_op.cu.cc
@@ -808,7 +846,7 @@ index dad852093e..71adfaf3ed 100644
      auto ptr = allocation->ptr();
      allocations.emplace_back(std::move(allocation));
 diff --git a/paddle/phi/kernels/funcs/softmax_impl.h b/paddle/phi/kernels/funcs/softmax_impl.h
-index 44cd4c7c84..85e5e1c897 100644
+index a28743d2b7..e79f718696 100644
 --- a/paddle/phi/kernels/funcs/softmax_impl.h
 +++ b/paddle/phi/kernels/funcs/softmax_impl.h
 @@ -21,6 +21,7 @@ limitations under the License. */
@@ -820,7 +858,7 @@ index 44cd4c7c84..85e5e1c897 100644
  namespace phi {
  namespace funcs {
 diff --git a/paddle/phi/kernels/funcs/top_k_function_cuda.h b/paddle/phi/kernels/funcs/top_k_function_cuda.h
-index 3830598c60..504322b47a 100644
+index d9209f8c67..4c3f25fc69 100644
 --- a/paddle/phi/kernels/funcs/top_k_function_cuda.h
 +++ b/paddle/phi/kernels/funcs/top_k_function_cuda.h
 @@ -31,7 +31,7 @@ limitations under the License. */
@@ -1229,7 +1267,7 @@ index 490041539d..0d4ad38e16 100644
    constexpr int threads_per_block = 128;
    int warps_per_block = (threads_per_block / kWarpSize);
 diff --git a/paddle/phi/kernels/gpu/elementwise_grad.h b/paddle/phi/kernels/gpu/elementwise_grad.h
-index c2834b0f72..58cf459565 100644
+index 29fd53f88d..8fc8748ec3 100644
 --- a/paddle/phi/kernels/gpu/elementwise_grad.h
 +++ b/paddle/phi/kernels/gpu/elementwise_grad.h
 @@ -352,7 +352,11 @@ void ElementwiseAddGrad(const GPUContext &dev_ctx,
@@ -1311,7 +1349,7 @@ index ceeeb7113b..dc305872d8 100644
          funcs::BlockReduceMax(top_right_index, FINAL_MASK);
      int64_t in_bot_max_index =
 diff --git a/paddle/phi/kernels/gpu/layer_norm_grad_kernel.cu b/paddle/phi/kernels/gpu/layer_norm_grad_kernel.cu
-index 8a4debbc6b..28857f1b36 100644
+index df3d578e9a..78e311fdc4 100644
 --- a/paddle/phi/kernels/gpu/layer_norm_grad_kernel.cu
 +++ b/paddle/phi/kernels/gpu/layer_norm_grad_kernel.cu
 @@ -228,7 +228,7 @@ PD_REGISTER_KERNEL(layer_norm_grad,

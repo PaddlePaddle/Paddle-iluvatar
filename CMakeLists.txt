@@ -96,11 +96,11 @@ set_target_properties(external_error_proto PROPERTIES POSITION_INDEPENDENT_CODE
                                                       ON)
 set(ILUVATAR_EXTERNAL_DEPS_TARGET iluvatar_external_deps)
 if(WITH_FLAGCX)
-  add_custom_target(${ILUVATAR_EXTERNAL_DEPS_TARGET} DEPENDS eigen3 zlib
-                                                             protobuf flagcx)
+  add_custom_target(${ILUVATAR_EXTERNAL_DEPS_TARGET}
+                    DEPENDS eigen3 zlib protobuf flagcx warpctc)
 else()
   add_custom_target(${ILUVATAR_EXTERNAL_DEPS_TARGET} DEPENDS eigen3 zlib
-                                                             protobuf)
+                                                             protobuf warpctc)
 endif()
 
 if(WITH_COREX)
@@ -703,8 +703,8 @@ file(
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/unstack_grad_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/unstack_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/viterbi_decode_kernel.cu
-  # ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/warpctc_grad_kernel.cu
-  # ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/warpctc_kernel.cu
+  ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/warpctc_grad_kernel.cu
+  ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/warpctc_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/warprnnt_grad_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/weighted_sample_neighbors_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/where_grad_kernel.cu
@@ -898,8 +898,8 @@ target_link_libraries(
           ixattnbkd
           nccl
           onednn
-          # warpctc change nccl to ${FLAGCX_LIB} if compiling with FlagCX
-          # ${FLAGCX_LIB}
+          warpctc
+          # change nccl to ${FLAGCX_LIB} if compiling with FlagCX ${FLAGCX_LIB}
 )
 
 if(TARGET phi_core)
