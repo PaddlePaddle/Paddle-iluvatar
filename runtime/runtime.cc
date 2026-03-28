@@ -35,6 +35,7 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "cinn/cinn_interface.h"
 #include "glog/logging.h"
 #include "paddle/phi/backends/custom/cuda_graph.h"
 #include "paddle/phi/backends/device_base.h"
@@ -51,6 +52,16 @@ static int global_current_device = 0;
 
 const char *const DeviceType = "iluvatar_gpu";
 const char *const SubDeviceType = "v0.1";
+
+#ifdef WITH_CINN
+namespace paddle {
+namespace custom_device {
+namespace iluvatar {
+void InitCinnInterface(C_DeviceInterface *interface);
+}
+}  // namespace custom_device
+}  // namespace paddle
+#endif
 
 namespace phi {
 
@@ -1212,6 +1223,76 @@ C_Status GetParameterSettersForExecGraph(C_CudaGraph graph,
   return C_SUCCESS;
 }
 
+C_Status GetMaxSharedMemPerBlock(const C_Device device,
+                                 size_t *shared_mem_per_block) {
+  int id = device->id;
+  int count = 0;
+  cudaError_t status =
+      cudaDeviceGetAttribute(&count, cudaDevAttrMaxSharedMemoryPerBlock, id);
+  *shared_mem_per_block = count;
+  return C_SUCCESS;
+}
+
+C_Status GetWarpSize(const C_Device device, size_t *warp_size) {
+  int id = device->id;
+  int size = 0;
+  cudaError_t status = cudaDeviceGetAttribute(&size, cudaDevAttrWarpSize, id);
+  *warp_size = size;
+  return C_SUCCESS;
+}
+
+C_Status GetMaxRegistersPerMultiProcessor(const C_Device device,
+                                          size_t *registers_per_mp) {
+  int id = device->id;
+  int count = 0;
+  cudaError_t status = cudaDeviceGetAttribute(
+      &count, cudaDevAttrMaxRegistersPerMultiprocessor, id);
+  *registers_per_mp = count;
+  return C_SUCCESS;
+}
+
+C_Status GetPreferredVectorWidth(const C_Device device,
+                                 size_t *vector_alignment) {
+  int id = device->id;
+  // int count = 0;
+  // cudaError_t status =
+  //     cudaDeviceGetAttribute(&count, cudaDevAttrMaxSharedMemoryPerBlock, id);
+  // *vector_alignment = count;
+  *vector_alignment = 128;
+  return C_SUCCESS;
+}
+
+C_Status GetMaxBlocksPerMultiProcessor(const C_Device device,
+                                       size_t *blocks_per_mp) {
+  int id = device->id;
+  // int count = 0;
+  // cudaError_t status =
+  //     cudaDeviceGetAttribute(&count, cudaDevAttrMaxBlocksPerMultiprocessor,
+  //     id);
+  // *blocks_per_mp = count;
+  *blocks_per_mp = 64;
+  return C_SUCCESS;
+}
+
+C_Status GetMaxBlockDimSize(const C_Device device,
+                            std::array<unsigned int, 3> *block_dim_size) {
+  int id = device->id;
+  std::array<unsigned int, 3> ret = {};
+  int size;
+  auto error_code_x =
+      cudaDeviceGetAttribute(&size, cudaDevAttrMaxBlockDimX, id);
+  ret[0] = size;
+  auto error_code_y =
+      cudaDeviceGetAttribute(&size, cudaDevAttrMaxBlockDimY, id);
+  ret[1] = size;
+  auto error_code_z =
+      cudaDeviceGetAttribute(&size, cudaDevAttrMaxBlockDimZ, id);
+  ret[2] = size;
+
+  *block_dim_size = ret;
+  return C_SUCCESS;
+}
+
 void InitPlugin(CustomRuntimeParams *params) {
   PADDLE_CUSTOM_RUNTIME_CHECK_VERSION(params);
   params->device_type = const_cast<char *>(DeviceType);
@@ -1338,4 +1419,19 @@ void InitPlugin(CustomRuntimeParams *params) {
   params->interface->blas_set_math_mode = BlasSetMathMode;
   params->interface->init_dnn_handle = InitDnnHandle;
   params->interface->destroy_dnn_handle = DestroyDnnHandle;
+
+  params->interface->get_max_shared_mem_per_block = GetMaxSharedMemPerBlock;
+  params->interface->get_max_blocks_per_mp = GetMaxBlocksPerMultiProcessor;
+  params->interface->get_warp_size = GetWarpSize;
+  params->interface->get_max_registers_per_mp =
+      GetMaxRegistersPerMultiProcessor;
+  params->interface->get_vector_width = GetPreferredVectorWidth;
+  params->interface->get_max_block_dim_size = GetMaxBlockDimSize;
+
+#ifdef WITH_CINN
+  if (params->interface) {
+    paddle::custom_device::iluvatar::InitCinnInterface(params->interface);
+    LOG(INFO) << "[Iluvatar] CINN Interface registered successfully.";
+  }
+#endif
 }
