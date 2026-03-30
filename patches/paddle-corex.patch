@@ -1,3 +1,73 @@
+From 5fb63101f918d0e8a950cfcc1ae9fae6d0c02cad Mon Sep 17 00:00:00 2001
+From: tianyuzhou668 <2431054748@qq.com>
+Date: Mon, 30 Mar 2026 16:22:22 +0800
+Subject: [PATCH] [Iluvatar] Update Patch
+
+---
+ cmake/external/warpctc.cmake                  | 12 ++-
+ .../tactic/tile_transpose_tactic.cc           |  6 +-
+ .../operators/collective/recv_v2_op.cu.cc     |  2 +-
+ .../operators/collective/send_v2_op.cu.cc     |  2 +-
+ .../fluid/platform/device/gpu/nccl_helper.h   |  2 +-
+ paddle/fluid/pybind/pybind.cc                 |  6 ++
+ paddle/phi/backends/c_nvtx_lib.h              | 17 ++++
+ paddle/phi/backends/custom/custom_device.cc   | 14 +++
+ paddle/phi/backends/device_base.cc            |  8 ++
+ paddle/phi/backends/device_base.h             |  8 ++
+ paddle/phi/backends/device_ext.h              | 21 ++++-
+ paddle/phi/backends/device_manager.cc         | 26 ++++++
+ paddle/phi/backends/device_manager.h          |  8 ++
+ paddle/phi/backends/dynload/cudnn.cc          |  8 ++
+ paddle/phi/backends/dynload/dynamic_loader.cc |  6 ++
+ .../backends/gpu/cuda/cuda_device_function.h  |  4 +-
+ paddle/phi/backends/gpu/cuda/cuda_graph.cc    |  2 +-
+ paddle/phi/backends/gpu/cuda/cuda_helper.h    |  2 +-
+ paddle/phi/backends/gpu/cuda/cudnn_desc.h     | 16 +++-
+ paddle/phi/backends/gpu/cuda/cudnn_helper.h   |  2 +-
+ paddle/phi/backends/gpu/gpu_launch_config.h   | 16 +++-
+ paddle/phi/backends/gpu/gpu_primitives.h      | 25 +++++
+ paddle/phi/backends/gpu/gpu_types.h           |  5 +
+ paddle/phi/core/distributed/nccl_tools.cc     |  2 +-
+ paddle/phi/core/enforce.h                     |  6 +-
+ .../phi/core/memory/allocation/CMakeLists.txt |  2 +-
+ paddle/phi/core/utils/data_type.h             |  2 +-
+ paddle/phi/kernels/funcs/activation_functor.h | 20 ++++
+ paddle/phi/kernels/funcs/affine_grid_utils.h  |  2 +
+ paddle/phi/kernels/funcs/blas/blas_impl.cu.h  | 18 +++-
+ paddle/phi/kernels/funcs/cufft_util.h         | 80 ++++++++++++++++
+ paddle/phi/kernels/funcs/layer_norm_impl.cu.h |  4 -
+ paddle/phi/kernels/funcs/math_cuda_utils.h    |  8 +-
+ paddle/phi/kernels/funcs/mode.h               |  3 -
+ paddle/phi/kernels/funcs/reduce_function.h    |  2 +-
+ paddle/phi/kernels/funcs/reduce_gpu_kernel.h  | 16 ++--
+ paddle/phi/kernels/funcs/segmented_array.h    |  8 ++
+ paddle/phi/kernels/funcs/softmax_impl.h       |  1 +
+ .../phi/kernels/funcs/top_k_function_cuda.h   | 91 +++++++++++--------
+ .../fusion/gpu/fused_layernorm_kernel.cu      |  4 -
+ .../fused_layernorm_residual_dropout_bias.h   | 17 ----
+ .../phi/kernels/gpu/batch_norm_grad_kernel.cu |  2 +-
+ paddle/phi/kernels/gpu/batch_norm_kernel.cu   | 11 ++-
+ .../kernels/gpu/cross_entropy_grad_kernel.cu  |  2 +-
+ .../phi/kernels/gpu/cross_entropy_kernel.cu   | 10 +-
+ paddle/phi/kernels/gpu/elementwise_grad.h     |  4 +
+ .../gpu/fused_rms_norm_quant_grad_kernel.cu   |  2 +-
+ .../kernels/gpu/instance_norm_grad_kernel.cu  |  2 +-
+ .../phi/kernels/gpu/instance_norm_kernel.cu   |  2 +-
+ .../kernels/gpu/interpolate_grad_kernel.cu    | 12 +--
+ .../phi/kernels/gpu/layer_norm_grad_kernel.cu |  2 +-
+ paddle/phi/kernels/gpu/layer_norm_kernel.cu   |  2 +-
+ paddle/phi/kernels/gpudnn/conv_cudnn_v7.h     | 78 ++++++++++++----
+ paddle/phi/kernels/gpudnn/softmax_gpudnn.h    | 57 +++++++-----
+ paddle/phi/kernels/gpudnn/softmax_kernel.cu   |  2 +-
+ .../kernels/primitive/compute_primitives.h    | 24 ++---
+ paddle/phi/kernels/reduce_sum_kernel.cc       |  2 +
+ paddle/phi/kernels/shape_kernel.cc            |  2 +
+ paddle/phi/kernels/squeeze_kernel.cc          |  2 +
+ paddle/phi/kernels/strided_slice_kernel.cc    |  2 +
+ paddle/phi/kernels/unsqueeze_kernel.cc        |  2 +
+ 61 files changed, 548 insertions(+), 178 deletions(-)
+ create mode 100644 paddle/phi/backends/c_nvtx_lib.h
+
 diff --git a/cmake/external/warpctc.cmake b/cmake/external/warpctc.cmake
 index 17ef70b4a0..e70bd507b3 100644
 --- a/cmake/external/warpctc.cmake
@@ -36,6 +106,33 @@ index 17ef70b4a0..e70bd507b3 100644
               -DNVCC_FLAGS_EXTRA=${NVCC_FLAGS_EXTRA}
               -DWITH_TORCH=OFF
               -DCMAKE_DISABLE_FIND_PACKAGE_Torch=ON
+diff --git a/paddle/cinn/ir/group_schedule/tactic/tile_transpose_tactic.cc b/paddle/cinn/ir/group_schedule/tactic/tile_transpose_tactic.cc
+index 2402ff8a80..24111cf190 100644
+--- a/paddle/cinn/ir/group_schedule/tactic/tile_transpose_tactic.cc
++++ b/paddle/cinn/ir/group_schedule/tactic/tile_transpose_tactic.cc
+@@ -556,11 +556,11 @@ void TileTransposeTactic::TileCacheBlock(ir::IRSchedule* sch,
+   sch->Split(shared_cache_block_id, offset + 1, {-1, 4, 8});
+   sch->Split(shared_cache_block_id,
+              offset,
+-             {-1, static_cast<int>(context_->config.tile_config.warp_size)});
++             {-1, 32});
+ 
+   sch->Split(local_cache_block_id,
+              offset + 1,
+-             {-1, static_cast<int>(context_->config.tile_config.warp_size)});
++             {-1, 32});
+   sch->Split(local_cache_block_id, offset, {-1, 4, 8});
+ 
+   sch->Reorder(shared_cache_block_id, OffsetVec({0, 2, 3, 4, 1}, offset));
+@@ -578,7 +578,7 @@ void TileTransposeTactic::TileBlock(ir::IRSchedule* sch,
+   int offset = high_axis_.size();
+   sch->Split(block_id,
+              offset + 1,
+-             {-1, static_cast<int>(context_->config.tile_config.warp_size)});
++             {-1, 32});
+   sch->Split(block_id, offset, {-1, 4, 8});
+ 
+   sch->Reorder(block_id, OffsetVec({0, 3, 1, 2, 4}, offset));
 diff --git a/paddle/fluid/operators/collective/recv_v2_op.cu.cc b/paddle/fluid/operators/collective/recv_v2_op.cu.cc
 index 8fa6b3ae60..f63217421f 100644
 --- a/paddle/fluid/operators/collective/recv_v2_op.cu.cc
@@ -75,6 +172,232 @@ index 93e1278861..da47b74e70 100644
    } else if (type == framework::proto::VarType::BF16) {
      return ncclBfloat16;
  #endif
+diff --git a/paddle/fluid/pybind/pybind.cc b/paddle/fluid/pybind/pybind.cc
+index 70b6c6263b..69a29df0f6 100644
+--- a/paddle/fluid/pybind/pybind.cc
++++ b/paddle/fluid/pybind/pybind.cc
+@@ -190,6 +190,7 @@ limitations under the License. */
+ 
+ #ifdef PADDLE_WITH_CUSTOM_DEVICE
+ #include "paddle/fluid/platform/profiler/custom_device/custom_tracer.h"
++#include "paddle/phi/backends/c_nvtx_lib.h"
+ #include "paddle/phi/backends/device_base.h"
+ #include "paddle/phi/capi/capi.h"
+ #include "paddle/phi/core/platform/collective_helper.h"
+@@ -3810,6 +3811,11 @@ All parameter, weight, gradient are variables in Paddle.
+              << "MB, multi_processor_count=" << prop.multiProcessorCount << ")";
+         return ostr.str();
+       });
++  m.def("nvprof_nvtx_push", [](const std::string &name) {
++    phi::DeviceManager::CudaNvtxRangePush(name,
++                                          phi::nvtx::NvtxRangeColor::Green);
++  });
++  m.def("nvprof_nvtx_pop", phi::DeviceManager::CudaNvtxRangePop);
+ #endif
+ 
+ #ifdef PADDLE_WITH_IPU
+diff --git a/paddle/phi/backends/c_nvtx_lib.h b/paddle/phi/backends/c_nvtx_lib.h
+new file mode 100644
+index 0000000000..516f32cf8d
+--- /dev/null
++++ b/paddle/phi/backends/c_nvtx_lib.h
+@@ -0,0 +1,17 @@
++// Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
++#pragma once
++
++#include <cstdint>
++
++namespace phi {
++namespace nvtx {
++enum class NvtxRangeColor : uint32_t {
++  Black = 0x00000000,
++  Red = 0x00ff0000,
++  Green = 0x0000ff00,
++  Blue = 0x000000ff,
++  White = 0x00ffffff,
++  Yellow = 0x00ffff00,
++};
++}  // namespace nvtx
++}  // namespace phi
+diff --git a/paddle/phi/backends/custom/custom_device.cc b/paddle/phi/backends/custom/custom_device.cc
+index 00b0439712..f5f7870044 100644
+--- a/paddle/phi/backends/custom/custom_device.cc
++++ b/paddle/phi/backends/custom/custom_device.cc
+@@ -1121,6 +1121,20 @@ class CustomDevice : public DeviceInterface {
+         reinterpret_cast<C_Profiler>(collector), start_ns, user_data));
+   }
+ 
++  // nvtx
++  void CudaNvtxRangePush(const std::string& name,
++                         const nvtx::NvtxRangeColor color) {
++    if (pimpl_->cudanvtxrangepush) {
++      pimpl_->cudanvtxrangepush(name, static_cast<C_NvtxRangeColor>(color));
++    }
++  }
++
++  void CudaNvtxRangePop() {
++    if (pimpl_->cudanvtxrangepop) {
++      pimpl_->cudanvtxrangepop();
++    }
++  }
++
+   void InitBlasHandle(size_t dev_id,
+                       void** blas_handle,
+                       stream::stream_t stream) override {
+diff --git a/paddle/phi/backends/device_base.cc b/paddle/phi/backends/device_base.cc
+index f4035c0aa5..efbff6e566 100644
+--- a/paddle/phi/backends/device_base.cc
++++ b/paddle/phi/backends/device_base.cc
+@@ -497,6 +497,14 @@ void DeviceInterface::ProfilerCollectTraceData(
+   INTERFACE_UNIMPLEMENT;
+ }
+ 
++// nvtx
++void DeviceInterface::CudaNvtxRangePush(const std::string& name,
++                                        const nvtx::NvtxRangeColor color) {
++  INTERFACE_UNIMPLEMENT;
++}
++
++void DeviceInterface::CudaNvtxRangePop() { INTERFACE_UNIMPLEMENT; }
++
+ void DeviceInterface::InitBlasHandle(size_t dev_id,
+                                      void** blas_handle,
+                                      stream::stream_t stream) {
+diff --git a/paddle/phi/backends/device_base.h b/paddle/phi/backends/device_base.h
+index e866a6ec99..2c9ef2f521 100644
+--- a/paddle/phi/backends/device_base.h
++++ b/paddle/phi/backends/device_base.h
+@@ -17,6 +17,7 @@
+ 
+ #include "paddle/phi/backends/c_comm_lib.h"
+ #include "paddle/phi/backends/c_cuda_graph_lib.h"
++#include "paddle/phi/backends/c_nvtx_lib.h"
+ #include "paddle/phi/backends/event.h"
+ #include "paddle/phi/backends/stream.h"
+ #include "paddle/phi/common/place.h"
+@@ -337,6 +338,13 @@ class DeviceInterface {  // Driver / Runtime
+                                         uint64_t start_ns,
+                                         void* user_data);
+ 
++  // nvtx
++  virtual void CudaNvtxRangePush(
++      const std::string& name,
++      const nvtx::NvtxRangeColor color = nvtx::NvtxRangeColor::Green);
++
++  virtual void CudaNvtxRangePop();
++
+   virtual void InitBlasHandle(size_t dev_id,
+                               void** blas_handle,
+                               stream::stream_t stream);
+diff --git a/paddle/phi/backends/device_ext.h b/paddle/phi/backends/device_ext.h
+index 5f8f669bfc..1e0792c4b2 100644
+--- a/paddle/phi/backends/device_ext.h
++++ b/paddle/phi/backends/device_ext.h
+@@ -70,7 +70,7 @@ typedef enum {
+ 
+ typedef struct C_Device_st {
+   int id;
+-} * C_Device;
++}* C_Device;
+ 
+ typedef enum {
+   C_StreamCaptureModeGlobal = 0,
+@@ -84,6 +84,17 @@ typedef enum {
+   C_StreamCaptureStatusInvalidated
+ } C_StreamCaptureStatus;
+ 
++#ifndef _WIN32
++typedef enum {
++  C_Black = 0x00000000,
++  C_Red = 0x00ff0000,
++  C_Green = 0x0000ff00,
++  C_Blue = 0x000000ff,
++  C_White = 0x00ffffff,
++  C_Yellow = 0x00ffff00,
++} C_NvtxRangeColor;
++#endif
++
+ typedef struct C_Stream_st* C_Stream;
+ 
+ typedef struct C_Event_st* C_Event;
+@@ -881,6 +892,14 @@ struct C_DeviceInterface {
+ 
+   void* reserved_profiler_api[8];
+ 
++  //////////////////
++  // nvtx api //
++  /////////////////
++  C_Status (*cudanvtxrangepush)(const std::string& name,
++                                const C_NvtxRangeColor color);
++
++  C_Status (*cudanvtxrangepop)();
++
+   //////////////////
+   // blas handle api //
+   /////////////////
+diff --git a/paddle/phi/backends/device_manager.cc b/paddle/phi/backends/device_manager.cc
+index 874315b4e3..ce8aa131be 100644
+--- a/paddle/phi/backends/device_manager.cc
++++ b/paddle/phi/backends/device_manager.cc
+@@ -945,6 +945,32 @@ void DeviceManager::ProfilerCollectTraceData(
+   dev_impl->ProfilerCollectTraceData(collector, start_ns, context);
+ }
+ 
++// nvtx
++void DeviceManager::CudaNvtxRangePush(const std::string& name,
++                                      const nvtx::NvtxRangeColor color) {
++  auto custom_devices = DeviceManager::GetAllCustomDeviceTypes();
++  PADDLE_ENFORCE_GE(
++      custom_devices.size(),
++      1,
++      phi::errors::NotFound(
++          "Expected at least one custom device, but none found."));
++  auto device_type = custom_devices[0];
++  auto dev_impl = GetDeviceInterfaceWithType(device_type);
++  dev_impl->CudaNvtxRangePush(name, color);
++}
++
++void DeviceManager::CudaNvtxRangePop() {
++  auto custom_devices = DeviceManager::GetAllCustomDeviceTypes();
++  PADDLE_ENFORCE_GE(
++      custom_devices.size(),
++      1,
++      phi::errors::NotFound(
++          "Expected at least one custom device, but none found."));
++  auto device_type = custom_devices[0];
++  auto dev_impl = GetDeviceInterfaceWithType(device_type);
++  dev_impl->CudaNvtxRangePop();
++}
++
+ void DeviceManager::InitBlasHandle(const Place& place,
+                                    void** blas_handle,
+                                    stream::stream_t stream) {
+diff --git a/paddle/phi/backends/device_manager.h b/paddle/phi/backends/device_manager.h
+index 1bef56e3e9..b456f06578 100644
+--- a/paddle/phi/backends/device_manager.h
++++ b/paddle/phi/backends/device_manager.h
+@@ -23,6 +23,7 @@
+ 
+ #include "paddle/phi/backends/c_comm_lib.h"
+ #include "paddle/phi/backends/c_cuda_graph_lib.h"
++#include "paddle/phi/backends/c_nvtx_lib.h"
+ #include "paddle/phi/backends/device_base.h"
+ #include "paddle/phi/backends/device_ext.h"
+ #include "paddle/phi/backends/event.h"
+@@ -326,6 +327,13 @@ class PADDLE_API DeviceManager {
+                                        uint64_t start_ns,
+                                        void* context);
+ 
++  // nvtx
++  static void CudaNvtxRangePush(
++      const std::string& name,
++      const nvtx::NvtxRangeColor color = nvtx::NvtxRangeColor::Green);
++
++  static void CudaNvtxRangePop();
++
+   static void Release();
+ 
+   static void InitBlasHandle(const Place& place,
 diff --git a/paddle/phi/backends/dynload/cudnn.cc b/paddle/phi/backends/dynload/cudnn.cc
 index 5a18808d47..749073ce38 100644
 --- a/paddle/phi/backends/dynload/cudnn.cc
@@ -101,6 +424,30 @@ index 5a18808d47..749073ce38 100644
  bool HasCUDNN() {
    std::call_once(cudnn_dso_flag,
                   []() { cudnn_dso_handle = GetCUDNNDsoHandle(); });
+diff --git a/paddle/phi/backends/dynload/dynamic_loader.cc b/paddle/phi/backends/dynload/dynamic_loader.cc
+index 99d3733da0..197f82bde3 100644
+--- a/paddle/phi/backends/dynload/dynamic_loader.cc
++++ b/paddle/phi/backends/dynload/dynamic_loader.cc
+@@ -109,6 +109,10 @@ COMMON_DECLARE_string(magma_dir);
+ #define FFT_LIB_NAME "libcufft.so"
+ #endif
+ 
++#ifndef NVTOOLS_LIB_NAME
++#define NVTOOLS_LIB_NAME "libnvToolsExt.so"
++#endif
++
+ #ifndef SPARSELT_LIB_NAME
+ #define SPARSELT_LIB_NAME "libcusparseLt.so"
+ #endif
+@@ -1033,6 +1037,8 @@ void* GetNvtxDsoHandle() {
+   PADDLE_THROW(common::errors::Unimplemented("Nvtx do not support Apple."));
+ #elif defined(_WIN32)
+   PADDLE_THROW(common::errors::Unimplemented("Nvtx do not support Windows."));
++#elif defined(PADDLE_WITH_CUSTOM_DEVICE)
++  return GetDsoHandleFromSearchPath(FLAGS_cuda_dir, NVTOOLS_LIB_NAME);
+ #elif !defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_XPU)
+   PADDLE_THROW(common::errors::Unimplemented(
+       "Nvtx do not support without CUDA or XPU."));
 diff --git a/paddle/phi/backends/gpu/cuda/cuda_device_function.h b/paddle/phi/backends/gpu/cuda/cuda_device_function.h
 index 092365a961..6b05da600b 100644
 --- a/paddle/phi/backends/gpu/cuda/cuda_device_function.h
@@ -1806,3 +2153,5 @@ index ffdf995ece..4a7e03f4ad 100644
  #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
  PD_REGISTER_KERNEL(unsqueeze,
                     GPU,
+-- 
+2.25.1

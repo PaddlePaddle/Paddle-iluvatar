@@ -150,6 +150,7 @@ file(
   ${PADDLE_SOURCE_DIR}/paddle/phi/backends/dynload/cusolver.cc
   ${PADDLE_SOURCE_DIR}/paddle/phi/backends/dynload/cusparse.cc
   ${PADDLE_SOURCE_DIR}/paddle/phi/backends/dynload/nvjpeg.cc
+  ${PADDLE_SOURCE_DIR}/paddle/phi/backends/dynload/nvtx.cc
   # ${PADDLE_SOURCE_DIR}/paddle/phi/backends/gpu/cuda
   ${PADDLE_SOURCE_DIR}/paddle/phi/backends/gpu/cuda/cuda_graph.cc
   ${PADDLE_SOURCE_DIR}/paddle/phi/backends/gpu/cuda/cuda_info.cc
