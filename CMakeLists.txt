@@ -818,6 +818,16 @@ file(
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/sparse/gpu/unary_grad_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/sparse/gpu/unary_kernel.cu)
 
+file(
+  GLOB
+  AP_CC_SRCS
+  ${PADDLE_SOURCE_DIR}/paddle/ap/src/axpr/*.cc
+  ${PADDLE_SOURCE_DIR}/paddle/ap/src/fs/*.cc
+  ${PADDLE_SOURCE_DIR}/paddle/ap/src/code_module/*.cc
+  ${PADDLE_SOURCE_DIR}/paddle/ap/src/code_gen/*.cc
+  ${PADDLE_SOURCE_DIR}/paddle/ap/src/kernel_dispatch/*.cc
+  ${PADDLE_SOURCE_DIR}/paddle/ap/src/paddle/phi/*.cc)
+
 foreach(src ${CUDA_SRCS})
   if(NOT EXISTS ${src})
     message(FATAL_ERROR "Missing CUDA source file: ${src}")
@@ -862,6 +872,7 @@ list(
 file(
   GLOB_RECURSE CC_SRCS
   RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+  ${AP_CC_SRCS}
   runtime/runtime.cc
   runtime/iluvatar_context.cc
   flags/*.cc
