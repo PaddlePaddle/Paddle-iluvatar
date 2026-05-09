@@ -175,6 +175,8 @@ file(
   # ${PADDLE_SOURCE_DIR}/paddle/phi/kernels
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/array_grad_kernel.cc
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/array_kernel.cc
+  ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/aminmax_grad_kernel.cc
+  ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/aminmax_kernel.cc
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/assign_kernel.cc
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/batch_norm_kernel.cc
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/check_memory_continue_kernel.cc

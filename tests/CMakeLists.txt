@@ -5,7 +5,7 @@ enable_testing()
 find_package(Python REQUIRED COMPONENTS Interpreter)
 
 set(SCRIPT_DIR ${CMAKE_CURRENT_LIST_DIR})
-set(LEGACY_TEST_PATH "${SCRIPT_DIR}/../../../Paddle/test/legacy_test")
+set(LEGACY_TEST_PATH "${SCRIPT_DIR}/../Paddle/test/legacy_test")
 
 set(EXCLUDED_TESTS
     "test_ops_roi_align.py" "test_tensor_fill_diagonal_tensor_op_iluvatar.py"

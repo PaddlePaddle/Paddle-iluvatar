@@ -293,3 +293,15 @@ PHI_DEFINE_EXPORTED_bool(
 PHI_DEFINE_EXPORTED_int64(conv_workspace_size_limit,
                           1024,
                           "cuDNN convolution workspace limit in MB unit.");
+
+PHI_DEFINE_EXPORTED_int32(
+    deterministic_rng_grid,
+    1024,
+    "Grid size cap when FLAGS_deterministic_rng is enabled.");
+
+PHI_DEFINE_EXPORTED_bool(
+    deterministic_rng,
+    false,
+    "Enable cross-device RNG consistency by fixing GPU kernel launch "
+    "configuration. When true, RNG kernels use a fixed grid/block size "
+    "so that the same seed produces identical results across GPU types.");
