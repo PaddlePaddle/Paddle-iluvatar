@@ -70,18 +70,18 @@ diff --git a/cmake/external/warpctc.cmake b/cmake/external/warpctc.cmake
 index 17ef70b4a0..e70bd507b3 100644
 --- a/cmake/external/warpctc.cmake
 +++ b/cmake/external/warpctc.cmake
-@@ -56,6 +56,11 @@ if(WITH_ROCM)
-       -p1 < ${PADDLE_SOURCE_DIR}/patches/warpctc/hip.cmake.patch)
+@@ -62,7 +62,11 @@ if(WITH_ROCM)
+         patch -p1 < ${PADDLE_SOURCE_DIR}/patches/warpctc/hip.cmake.patch)
+   endif()
  endif()
  
-+
 +set(WARPCTC_ILUVATAR_PATCH
 +    "${CUSTOM_DEVICE_SOURCE_DIR}/patches/warpctc-corex.patch")
 +message(STATUS "warpctc: Iluvatar patch at PATCH step: ${WARPCTC_ILUVATAR_PATCH}")
 +
- set(WARPCTC_INCLUDE_DIR
-     "${WARPCTC_INSTALL_DIR}/include"
-     CACHE PATH "Warp-ctc Directory" FORCE)
+ set(WARPCTC_ROCM_CMAKE_ARGS "")
+ if(WITH_ROCM)
+   list(APPEND WARPCTC_ROCM_CMAKE_ARGS -DROCM_PATH=${ROCM_PATH}
 @@ -121,6 +126,9 @@ ExternalProject_Add(
    COMMAND ${WARPCTC_PATCH_COMMAND}
    COMMAND ${WARPCTC_PATCH_CUDA_COMMAND}
@@ -92,13 +92,14 @@ index 17ef70b4a0..e70bd507b3 100644
    #BUILD_ALWAYS    1
    CMAKE_ARGS -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
               -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-@@ -131,9 +139,9 @@ ExternalProject_Add(
+@@ -131,10 +139,10 @@ ExternalProject_Add(
               -DCMAKE_CXX_FLAGS_RELEASE=${WARPCTC_CXX_FLAGS_RELEASE}
               -DCMAKE_CXX_FLAGS_DEBUG=${WARPCTC_CXX_FLAGS_DEBUG}
               -DCMAKE_INSTALL_PREFIX=${WARPCTC_INSTALL_DIR}
 -             -DWITH_GPU=${WITH_GPU}
 +             -DWITH_GPU=ON
               -DWITH_ROCM=${WITH_ROCM}
+              ${WARPCTC_ROCM_CMAKE_ARGS}
 -             -DWITH_OMP=${USE_OMP}
 +             -DWITH_OMP=OFF
               -DNVCC_FLAGS_EXTRA=${NVCC_FLAGS_EXTRA}
