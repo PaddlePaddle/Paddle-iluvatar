@@ -1,11 +1,10 @@
-From 2f4fd341911214218cf7d4e885f9edc9b4c46963 Mon Sep 17 00:00:00 2001
+From ab177fb749c6d31a5625d88b4f50ed55f476d56f Mon Sep 17 00:00:00 2001
 From: tianyuzhou668 <tianyu.zhou@iluvatar.com>
-Date: Fri, 3 Apr 2026 17:01:34 +0800
-Subject: [PATCH] Update patch
+Date: Tue, 12 May 2026 16:50:16 +0800
+Subject: [PATCH] Update paddle
 
 ---
  cmake/external/warpctc.cmake                  | 12 ++-
- .../tactic/tile_transpose_tactic.cc           | 28 ------
  .../operators/collective/recv_v2_op.cu.cc     |  2 +-
  .../operators/collective/send_v2_op.cu.cc     |  2 +-
  .../fluid/platform/device/gpu/nccl_helper.h   |  2 +-
@@ -45,9 +44,9 @@ Subject: [PATCH] Update patch
  .../phi/kernels/funcs/top_k_function_cuda.h   | 91 +++++++++++--------
  .../fusion/gpu/fused_layernorm_kernel.cu      |  4 -
  .../fused_layernorm_residual_dropout_bias.h   | 17 ----
+ paddle/phi/kernels/gpu/adamw_kernel.cu        | 30 +++---
  .../phi/kernels/gpu/batch_norm_grad_kernel.cu |  2 +-
  paddle/phi/kernels/gpu/batch_norm_kernel.cu   | 11 ++-
- .../kernels/gpu/cross_entropy_grad_kernel.cu  |  2 +-
  paddle/phi/kernels/gpu/elementwise_grad.h     |  4 +
  .../gpu/fused_rms_norm_quant_grad_kernel.cu   |  2 +-
  .../kernels/gpu/instance_norm_grad_kernel.cu  |  2 +-
@@ -64,7 +63,7 @@ Subject: [PATCH] Update patch
  paddle/phi/kernels/squeeze_kernel.cc          |  2 +
  paddle/phi/kernels/strided_slice_kernel.cc    |  2 +
  paddle/phi/kernels/unsqueeze_kernel.cc        |  2 +
- 60 files changed, 516 insertions(+), 174 deletions(-)
+ 59 files changed, 530 insertions(+), 160 deletions(-)
  create mode 100644 paddle/phi/backends/c_nvtx_lib.h
 
 diff --git a/cmake/external/warpctc.cmake b/cmake/external/warpctc.cmake
@@ -145,7 +144,7 @@ index 93e1278861..da47b74e70 100644
      return ncclBfloat16;
  #endif
 diff --git a/paddle/fluid/pybind/pybind.cc b/paddle/fluid/pybind/pybind.cc
-index 70b6c6263b..69a29df0f6 100644
+index 02d618ee9d..d96807e00e 100644
 --- a/paddle/fluid/pybind/pybind.cc
 +++ b/paddle/fluid/pybind/pybind.cc
 @@ -190,6 +190,7 @@ limitations under the License. */
@@ -156,7 +155,7 @@ index 70b6c6263b..69a29df0f6 100644
  #include "paddle/phi/backends/device_base.h"
  #include "paddle/phi/capi/capi.h"
  #include "paddle/phi/core/platform/collective_helper.h"
-@@ -3810,6 +3811,11 @@ All parameter, weight, gradient are variables in Paddle.
+@@ -3840,6 +3841,11 @@ All parameter, weight, gradient are variables in Paddle.
               << "MB, multi_processor_count=" << prop.multiProcessorCount << ")";
          return ostr.str();
        });
@@ -397,7 +396,7 @@ index 5a18808d47..749073ce38 100644
    std::call_once(cudnn_dso_flag,
                   []() { cudnn_dso_handle = GetCUDNNDsoHandle(); });
 diff --git a/paddle/phi/backends/dynload/dynamic_loader.cc b/paddle/phi/backends/dynload/dynamic_loader.cc
-index 99d3733da0..197f82bde3 100644
+index b3312fc5a7..cdb8da3303 100644
 --- a/paddle/phi/backends/dynload/dynamic_loader.cc
 +++ b/paddle/phi/backends/dynload/dynamic_loader.cc
 @@ -109,6 +109,10 @@ COMMON_DECLARE_string(magma_dir);
@@ -411,7 +410,7 @@ index 99d3733da0..197f82bde3 100644
  #ifndef SPARSELT_LIB_NAME
  #define SPARSELT_LIB_NAME "libcusparseLt.so"
  #endif
-@@ -1033,6 +1037,8 @@ void* GetNvtxDsoHandle() {
+@@ -1036,6 +1040,8 @@ void* GetNvtxDsoHandle() {
    PADDLE_THROW(common::errors::Unimplemented("Nvtx do not support Apple."));
  #elif defined(_WIN32)
    PADDLE_THROW(common::errors::Unimplemented("Nvtx do not support Windows."));
@@ -443,10 +442,10 @@ index 092365a961..6b05da600b 100644
    unsigned mask = 0u;
    CREATE_SHFL_MASK(mask, tid < len);
 diff --git a/paddle/phi/backends/gpu/cuda/cuda_graph.cc b/paddle/phi/backends/gpu/cuda/cuda_graph.cc
-index 1c4f13e6b4..a90c0f6d21 100644
+index 00763723dc..3bf5a055d5 100644
 --- a/paddle/phi/backends/gpu/cuda/cuda_graph.cc
 +++ b/paddle/phi/backends/gpu/cuda/cuda_graph.cc
-@@ -199,7 +199,7 @@ inline void sync_streams(gpuStream_t to_record, gpuStream_t to_wait) {
+@@ -200,7 +200,7 @@ inline void sync_streams(gpuStream_t to_record, gpuStream_t to_wait) {
    PADDLE_ENFORCE_GPU_SUCCESS(
        cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
    PADDLE_ENFORCE_GPU_SUCCESS(cudaEventRecord(event, to_record));
@@ -648,19 +647,19 @@ index f4b268b14c..dec2e6ea8c 100644
  #endif
    PD_NCCL_DTYPE_TO_STR(ncclDouble, "float64");
 diff --git a/paddle/phi/core/enforce.h b/paddle/phi/core/enforce.h
-index 024a7de73e..907ffd5f25 100644
+index d07575028c..d4155eebf6 100644
 --- a/paddle/phi/core/enforce.h
 +++ b/paddle/phi/core/enforce.h
 @@ -97,7 +97,7 @@ inline bool is_error(bool stat) { return !stat; }
  
- void ThrowWarnInternal(const std::string& message);
+ PADDLE_API void ThrowWarnInternal(const std::string& message);
  
 -#if defined(__CUDA_ARCH__)
 +#if defined(__CUDA_ARCH__) && !defined(PADDLE_WITH_COREX)
  // For cuda, the assertions can affect performance and it is therefore
  // recommended to disable them in production code
  // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#assertion
-@@ -112,6 +112,10 @@ void ThrowWarnInternal(const std::string& message);
+@@ -112,6 +112,10 @@ PADDLE_API void ThrowWarnInternal(const std::string& message);
        asm("trap;");                                                \
      }                                                              \
    } while (0)
@@ -685,7 +684,7 @@ index ad327fa68f..1252d8886a 100644
         cuda_virtual_mem_allocator_v2.cc
         vmm_auto_growth_best_fit_allocator_v2.cc)
 diff --git a/paddle/phi/core/utils/data_type.h b/paddle/phi/core/utils/data_type.h
-index 5578d50e0c..bb884e156f 100644
+index e30fd0bf5d..cd3274868d 100644
 --- a/paddle/phi/core/utils/data_type.h
 +++ b/paddle/phi/core/utils/data_type.h
 @@ -258,7 +258,7 @@ inline ncclDataType_t ToNCCLDataType(DataType type) {
@@ -698,7 +697,7 @@ index 5578d50e0c..bb884e156f 100644
      return ncclBfloat16;
  #endif
 diff --git a/paddle/phi/kernels/funcs/activation_functor.h b/paddle/phi/kernels/funcs/activation_functor.h
-index 31997ae0df..e2d3fe2e72 100644
+index 78bec8faa5..c8bbf717c8 100644
 --- a/paddle/phi/kernels/funcs/activation_functor.h
 +++ b/paddle/phi/kernels/funcs/activation_functor.h
 @@ -3818,12 +3818,14 @@ struct CudaReciprocalFunctor<ComplexType<T>>
@@ -716,7 +715,7 @@ index 31997ae0df..e2d3fe2e72 100644
      } else if (either_inf(x.real, x.imag)) {
        // If either is Inf, return {0, 0}
        return ComplexType<T>(static_cast<T>(0), static_cast<T>(0));
-@@ -5416,6 +5418,23 @@ struct CudaHardSigmoidGradFunctor : public BaseActivationFunctor<T> {
+@@ -5414,6 +5416,23 @@ struct CudaHardSigmoidGradFunctor : public BaseActivationFunctor<T> {
    }
  };
  
@@ -740,7 +739,7 @@ index 31997ae0df..e2d3fe2e72 100644
  template <typename T>
  __device__ __forceinline__
      std::conditional_t<std::is_integral<T>::value, float, T>
-@@ -5436,6 +5455,7 @@ template <>
+@@ -5434,6 +5453,7 @@ template <>
  __device__ __forceinline__ double log_local<double>(double x) {
    return ::log(x);
  }
@@ -763,10 +762,10 @@ index e26a3dad55..3f49ff99bc 100644
  #include "paddle/phi/kernels/funcs/math_function.h"
  
 diff --git a/paddle/phi/kernels/funcs/blas/blas_impl.cu.h b/paddle/phi/kernels/funcs/blas/blas_impl.cu.h
-index fc86cc09d1..6295ff91ac 100644
+index f13c42e5e4..a432c01bd0 100644
 --- a/paddle/phi/kernels/funcs/blas/blas_impl.cu.h
 +++ b/paddle/phi/kernels/funcs/blas/blas_impl.cu.h
-@@ -1755,7 +1755,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
+@@ -1753,7 +1753,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
                                          const phi::bfloat16 *B,
                                          phi::bfloat16 beta,
                                          phi::bfloat16 *C) const {
@@ -775,7 +774,7 @@ index fc86cc09d1..6295ff91ac 100644
    // Note that cublas follows fortran order, so the order is different from
    // the cblas convention.
    int64_t lda = (transA == CblasNoTrans) ? K : M;
-@@ -1765,6 +1765,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
+@@ -1763,6 +1763,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
    cublasOperation_t cuTransB =
        (transB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
  
@@ -783,7 +782,7 @@ index fc86cc09d1..6295ff91ac 100644
    PADDLE_ENFORCE_GE(
        dev_ctx_.GetComputeCapability(),
        80,
-@@ -1772,6 +1773,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
+@@ -1770,6 +1771,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
            "cublas bf16 gemm requires GPU compute capability >= 80,"
            "but received %d",
            dev_ctx_.GetComputeCapability()));
@@ -791,7 +790,7 @@ index fc86cc09d1..6295ff91ac 100644
  
    float h_alpha = static_cast<float>(alpha);
    float h_beta = static_cast<float>(beta);
-@@ -2293,12 +2295,13 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
+@@ -2291,12 +2293,13 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
                                          phi::bfloat16 beta,
                                          phi::bfloat16 *C,
                                          int ldc) const {
@@ -806,7 +805,7 @@ index fc86cc09d1..6295ff91ac 100644
    PADDLE_ENFORCE_GE(
        dev_ctx_.GetComputeCapability(),
        80,
-@@ -2306,6 +2309,7 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
+@@ -2304,6 +2307,7 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
            "cublas bf16 gemm requires GPU compute capability >= 80,"
            "but received %d",
            dev_ctx_.GetComputeCapability()));
@@ -814,7 +813,7 @@ index fc86cc09d1..6295ff91ac 100644
  
    float h_alpha = static_cast<float>(alpha);
    float h_beta = static_cast<float>(beta);
-@@ -2802,7 +2806,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -2800,7 +2804,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
                                                 int64_t batchCount,
                                                 int64_t strideA,
                                                 int64_t strideB) const {
@@ -823,7 +822,7 @@ index fc86cc09d1..6295ff91ac 100644
    // Note that cublas follows fortran order, so the order is different from
    // the cblas convention.
    int64_t lda = (transA == CblasNoTrans) ? K : M;
-@@ -2881,7 +2885,11 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -2879,7 +2883,11 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
                                                     static_cast<int>(ldc),
                                                     strideC,
                                                     static_cast<int>(batchCount),
@@ -835,7 +834,7 @@ index fc86cc09d1..6295ff91ac 100644
                                                     algo));
      });
    }
-@@ -3175,7 +3183,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -3173,7 +3181,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
                                                 phi::bfloat16 beta,
                                                 phi::bfloat16 **C,
                                                 int batchCount) const {
@@ -844,7 +843,7 @@ index fc86cc09d1..6295ff91ac 100644
    // Note that cublas follows fortran order, so the order is different from
    // the cblas convention.
    int lda = (transA == CblasNoTrans) ? K : M;
-@@ -3186,6 +3194,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -3184,6 +3192,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
    cublasOperation_t cuTransB =
        (transB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
  
@@ -852,7 +851,7 @@ index fc86cc09d1..6295ff91ac 100644
    PADDLE_ENFORCE_GE(
        dev_ctx_.GetComputeCapability(),
        80,
-@@ -3193,6 +3202,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -3191,6 +3200,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
            "cublas bf16 gemm requires GPU compute capability >= 80,"
            "but received %d",
            dev_ctx_.GetComputeCapability()));
@@ -1064,10 +1063,10 @@ index db2dfa35c6..5944276dac 100644
  #include "paddle/phi/backends/gpu/gpu_context.h"
  #include "paddle/phi/core/dense_tensor.h"
 diff --git a/paddle/phi/kernels/funcs/reduce_function.h b/paddle/phi/kernels/funcs/reduce_function.h
-index 4ecc6f20ea..449219b32f 100644
+index 75d5cccc66..0e3deef966 100644
 --- a/paddle/phi/kernels/funcs/reduce_function.h
 +++ b/paddle/phi/kernels/funcs/reduce_function.h
-@@ -1129,7 +1129,7 @@ void ReduceKernel(const KPDevice& dev_ctx,
+@@ -1128,7 +1128,7 @@ void ReduceKernel(const KPDevice& dev_ctx,
        config.reduce_num == numel && !kIsTxFP16 && !kIsTxBF16 &&
        config.reduce_num <= std::numeric_limits<int32_t>::max();
  
@@ -1077,7 +1076,7 @@ index 4ecc6f20ea..449219b32f 100644
      CubTensorReduce<Tx, Ty, ReduceOp, TransformOp, IsMean>::apply(
          x_data, y_data, transform, config.reduce_num, dev_ctx, stream);
 diff --git a/paddle/phi/kernels/funcs/reduce_gpu_kernel.h b/paddle/phi/kernels/funcs/reduce_gpu_kernel.h
-index 1c45ae2b42..150bed6643 100644
+index d6f27dffd6..297ef67077 100644
 --- a/paddle/phi/kernels/funcs/reduce_gpu_kernel.h
 +++ b/paddle/phi/kernels/funcs/reduce_gpu_kernel.h
 @@ -42,6 +42,8 @@
@@ -1398,7 +1397,7 @@ index d9209f8c67..4c3f25fc69 100644
    }
    __syncthreads();
 diff --git a/paddle/phi/kernels/fusion/gpu/fused_layernorm_kernel.cu b/paddle/phi/kernels/fusion/gpu/fused_layernorm_kernel.cu
-index 4608f871f2..1d54e0d291 100644
+index 28abc332f5..e04b17fa24 100644
 --- a/paddle/phi/kernels/fusion/gpu/fused_layernorm_kernel.cu
 +++ b/paddle/phi/kernels/fusion/gpu/fused_layernorm_kernel.cu
 @@ -58,11 +58,7 @@ namespace fusion {
@@ -1414,7 +1413,7 @@ index 4608f871f2..1d54e0d291 100644
  template <typename T>
  struct SumOp {
 diff --git a/paddle/phi/kernels/fusion/gpu/fused_layernorm_residual_dropout_bias.h b/paddle/phi/kernels/fusion/gpu/fused_layernorm_residual_dropout_bias.h
-index f64a8fbaf3..55b3a6d06d 100644
+index 8dd3ddc2b5..2625937acd 100644
 --- a/paddle/phi/kernels/fusion/gpu/fused_layernorm_residual_dropout_bias.h
 +++ b/paddle/phi/kernels/fusion/gpu/fused_layernorm_residual_dropout_bias.h
 @@ -24,11 +24,7 @@ namespace fusion {
@@ -1428,7 +1427,7 @@ index f64a8fbaf3..55b3a6d06d 100644
 -#endif
  
  template <typename T>
- using CudnnDataType = phi::backends::gpu::CudnnDataType<T>;
+ using CudnnDataType = backends::gpu::CudnnDataType<T>;
 @@ -153,13 +149,8 @@ __global__ void FusedLayernormResidualDropoutBias(
  
    __shared__ U mean_share;
@@ -1467,8 +1466,70 @@ index f64a8fbaf3..55b3a6d06d 100644
            mask_vec[it][jt] = static_cast<MaskType>(rand[jt] >= dropout_prob);
          }
        }
+diff --git a/paddle/phi/kernels/gpu/adamw_kernel.cu b/paddle/phi/kernels/gpu/adamw_kernel.cu
+index 73a9f41e09..235b1c3f4a 100644
+--- a/paddle/phi/kernels/gpu/adamw_kernel.cu
++++ b/paddle/phi/kernels/gpu/adamw_kernel.cu
+@@ -426,11 +426,11 @@ template <typename T,        // Parameter type (may be fp16/bf16)
+                              // float/fp16/bf16)
+           typename TM = MT>  // Moment estimation type (default = MT, can be
+                              // bfloat16)
+-__global__ void AdamWStyleKernel(const double beta1,
+-                                 const double beta2,
+-                                 const double epsilon,
+-                                 const double weight_decay,
+-                                 const double lr_double,
++__global__ void AdamWStyleKernel(const float beta1,
++                                 const float beta2,
++                                 const float epsilon,
++                                 const float weight_decay,
++                                 const float lr_double,
+                                  const TG* __restrict__ grad,
+                                  const T* __restrict__ param,
+                                  T* __restrict__ param_out,
+@@ -451,9 +451,9 @@ __global__ void AdamWStyleKernel(const double beta1,
+                                  bool amsgrad) {
+   // These are then passed to adam_math as const opmath_t& (float), truncating
+   // at call boundary.
+-  const double bc1_dbl = 1.0 - torch_pow_(beta1, step_count);
+-  const double bc2_dbl = 1.0 - torch_pow_(beta2, step_count);
+-  const double bc2_sqrt_dbl = ::sqrt(bc2_dbl);
++  const float bc1_dbl = 1.0 - torch_pow_(beta1, step_count);
++  const float bc2_dbl = 1.0 - torch_pow_(beta2, step_count);
++  const float bc2_sqrt_dbl = ::sqrt(bc2_dbl);
+   // Truncate to opmath_t (float) at the "adam_math call boundary", matching
+   // torch exactly
+   const MT bias_correction1 = static_cast<MT>(bc1_dbl);
+@@ -480,9 +480,9 @@ __global__ void AdamWStyleKernel(const double beta1,
+     // We explicitly use __fma_rn to match: first compute (1-beta1)*g (rounded),
+     // then fma(beta1, exp_avg_double, rounded_result).
+     {
+-      double g_d = static_cast<double>(g);
+-      double exp_avg_d = static_cast<double>(exp_avg);
+-      double one_minus_beta1_times_g = __dmul_rn(1.0 - beta1, g_d);
++      float g_d = static_cast<float>(g);
++      float exp_avg_d = static_cast<float>(exp_avg);
++      float one_minus_beta1_times_g = __dmul_rn(1.0 - beta1, g_d);
+       exp_avg =
+           static_cast<MT>(__fma_rn(beta1, exp_avg_d, one_minus_beta1_times_g));
+     }
+@@ -490,10 +490,10 @@ __global__ void AdamWStyleKernel(const double beta1,
+     // exp_avg_sq = beta2 * exp_avg_sq + (1 - beta2) * grad * grad
+     // Match torch: ((1-beta2)*g)*g is computed left-to-right, then fma'd.
+     {
+-      double g_d = static_cast<double>(g);
+-      double exp_avg_sq_d = static_cast<double>(exp_avg_sq);
+-      double one_minus_beta2_times_g = __dmul_rn(1.0 - beta2, g_d);
+-      double grad_sq_term = __dmul_rn(one_minus_beta2_times_g, g_d);
++      float g_d = static_cast<float>(g);
++      float exp_avg_sq_d = static_cast<float>(exp_avg_sq);
++      float one_minus_beta2_times_g = __dmul_rn(1.0 - beta2, g_d);
++      float grad_sq_term = __dmul_rn(one_minus_beta2_times_g, g_d);
+       exp_avg_sq = static_cast<MT>(__fma_rn(beta2, exp_avg_sq_d, grad_sq_term));
+     }
+ 
 diff --git a/paddle/phi/kernels/gpu/batch_norm_grad_kernel.cu b/paddle/phi/kernels/gpu/batch_norm_grad_kernel.cu
-index cc81ffcc68..169be8d9c2 100644
+index abb3423699..5dd8c2123b 100644
 --- a/paddle/phi/kernels/gpu/batch_norm_grad_kernel.cu
 +++ b/paddle/phi/kernels/gpu/batch_norm_grad_kernel.cu
 @@ -712,7 +712,7 @@ void BatchNormGradFunctor(const Context &dev_ctx,
@@ -1481,10 +1542,10 @@ index cc81ffcc68..169be8d9c2 100644
      // TODO(wangran16): wait for MIOpen to improve the performance of BN
      if (H == 1 && W == 1) {
 diff --git a/paddle/phi/kernels/gpu/batch_norm_kernel.cu b/paddle/phi/kernels/gpu/batch_norm_kernel.cu
-index 37b7cdfb1f..b6c010698e 100644
+index 2500b2a553..b9bda574dc 100644
 --- a/paddle/phi/kernels/gpu/batch_norm_kernel.cu
 +++ b/paddle/phi/kernels/gpu/batch_norm_kernel.cu
-@@ -46,6 +46,10 @@ using CudnnDataType = phi::backends::gpu::CudnnDataType<T>;
+@@ -46,6 +46,10 @@ using CudnnDataType = backends::gpu::CudnnDataType<T>;
  template <typename T>
  using BatchNormParamType = typename CudnnDataType<T>::BatchNormParamType;
  
@@ -1523,21 +1584,8 @@ index 37b7cdfb1f..b6c010698e 100644
  
          // init intermediate storage
          DenseTensor block_data_tensor;
-diff --git a/paddle/phi/kernels/gpu/cross_entropy_grad_kernel.cu b/paddle/phi/kernels/gpu/cross_entropy_grad_kernel.cu
-index db240283d6..8d6a23e2cd 100644
---- a/paddle/phi/kernels/gpu/cross_entropy_grad_kernel.cu
-+++ b/paddle/phi/kernels/gpu/cross_entropy_grad_kernel.cu
-@@ -171,7 +171,7 @@ void CrossEntropyWithSoftmaxGradGPUKernel(const GPUContext& dev_ctx,
-                                           DenseTensor* logits_grad) {
-   PADDLE_ENFORCE_EQ(
-       dev_ctx.GetPlace().GetType(),
--      AllocationType::GPU,
-+      AllocationType::CUSTOM,
-       common::errors::Unavailable("softmax_with_cross_entropy operator's "
-                                   "CUDA kernel only runs on GPU device."));
-   const T* loss_grad_data = loss_grad.data<T>();
 diff --git a/paddle/phi/kernels/gpu/elementwise_grad.h b/paddle/phi/kernels/gpu/elementwise_grad.h
-index 29fd53f88d..8fc8748ec3 100644
+index 52fc578a47..477a68061b 100644
 --- a/paddle/phi/kernels/gpu/elementwise_grad.h
 +++ b/paddle/phi/kernels/gpu/elementwise_grad.h
 @@ -352,7 +352,11 @@ void ElementwiseAddGrad(const GPUContext &dev_ctx,
@@ -1553,7 +1601,7 @@ index 29fd53f88d..8fc8748ec3 100644
      dim3 grid_size =
          dim3(((size + vec_size - 1) / vec_size + PREDEFINED_BLOCK_SIZE - 1) /
 diff --git a/paddle/phi/kernels/gpu/fused_rms_norm_quant_grad_kernel.cu b/paddle/phi/kernels/gpu/fused_rms_norm_quant_grad_kernel.cu
-index 930a77c171..71bc7fcd8c 100644
+index 180b774b71..5e408b27be 100644
 --- a/paddle/phi/kernels/gpu/fused_rms_norm_quant_grad_kernel.cu
 +++ b/paddle/phi/kernels/gpu/fused_rms_norm_quant_grad_kernel.cu
 @@ -207,7 +207,7 @@ PD_REGISTER_KERNEL(fused_rms_norm_quant_grad,
@@ -1566,7 +1614,7 @@ index 930a77c171..71bc7fcd8c 100644
  PD_REGISTER_KERNEL(fused_rms_norm_quant_grad,
                     GPU,
 diff --git a/paddle/phi/kernels/gpu/instance_norm_grad_kernel.cu b/paddle/phi/kernels/gpu/instance_norm_grad_kernel.cu
-index b05cbce58e..55f75b51fc 100644
+index 60c113e9ab..b96b05a65f 100644
 --- a/paddle/phi/kernels/gpu/instance_norm_grad_kernel.cu
 +++ b/paddle/phi/kernels/gpu/instance_norm_grad_kernel.cu
 @@ -425,7 +425,7 @@ void InstanceNormGradKernel(const Context &dev_ctx,
@@ -1579,7 +1627,7 @@ index b05cbce58e..55f75b51fc 100644
  #ifdef PADDLE_WITH_HIP
    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::miopenSetTensorDescriptor(
 diff --git a/paddle/phi/kernels/gpu/instance_norm_kernel.cu b/paddle/phi/kernels/gpu/instance_norm_kernel.cu
-index e1f2b01f2d..8625cc6659 100644
+index b15bcfa7df..41dc2095ad 100644
 --- a/paddle/phi/kernels/gpu/instance_norm_kernel.cu
 +++ b/paddle/phi/kernels/gpu/instance_norm_kernel.cu
 @@ -96,7 +96,7 @@ void InstanceNormKernel(const Context &dev_ctx,
@@ -1592,7 +1640,7 @@ index e1f2b01f2d..8625cc6659 100644
    VLOG(3) << "Setting descriptors.";
    std::vector<int> dims;
 diff --git a/paddle/phi/kernels/gpu/interpolate_grad_kernel.cu b/paddle/phi/kernels/gpu/interpolate_grad_kernel.cu
-index ceeeb7113b..dc305872d8 100644
+index 4463d47f3c..c05032783d 100644
 --- a/paddle/phi/kernels/gpu/interpolate_grad_kernel.cu
 +++ b/paddle/phi/kernels/gpu/interpolate_grad_kernel.cu
 @@ -298,16 +298,16 @@ __global__ void KeBilinearInterpBwShareMemory(T* in,
@@ -1619,10 +1667,10 @@ index ceeeb7113b..dc305872d8 100644
          funcs::BlockReduceMax(top_right_index, FINAL_MASK);
      int64_t in_bot_max_index =
 diff --git a/paddle/phi/kernels/gpu/layer_norm_grad_kernel.cu b/paddle/phi/kernels/gpu/layer_norm_grad_kernel.cu
-index 15aebaa33d..d598dcaebb 100644
+index 987c633316..ae01771fa6 100644
 --- a/paddle/phi/kernels/gpu/layer_norm_grad_kernel.cu
 +++ b/paddle/phi/kernels/gpu/layer_norm_grad_kernel.cu
-@@ -260,7 +260,7 @@ PD_REGISTER_KERNEL(layer_norm_grad,
+@@ -262,7 +262,7 @@ PD_REGISTER_KERNEL(layer_norm_grad,
      kernel->OutputAt(2).SetDataType(phi::DataType::FLOAT32);
    }
  }
@@ -1632,10 +1680,10 @@ index 15aebaa33d..d598dcaebb 100644
                     GPU,
                     ALL_LAYOUT,
 diff --git a/paddle/phi/kernels/gpu/layer_norm_kernel.cu b/paddle/phi/kernels/gpu/layer_norm_kernel.cu
-index de26ff4ffa..e82598788a 100644
+index 42d3cde8c7..12a2d25e58 100644
 --- a/paddle/phi/kernels/gpu/layer_norm_kernel.cu
 +++ b/paddle/phi/kernels/gpu/layer_norm_kernel.cu
-@@ -791,7 +791,7 @@ PD_REGISTER_KERNEL(
+@@ -792,7 +792,7 @@ PD_REGISTER_KERNEL(
    kernel->OutputAt(1).SetDataType(phi::DataType::UNDEFINED);
    kernel->OutputAt(2).SetDataType(phi::DataType::UNDEFINED);
  }
