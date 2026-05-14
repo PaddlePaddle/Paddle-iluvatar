@@ -4,9 +4,10 @@ Date: Fri, 27 Mar 2026 14:43:02 +0800
 Subject: [PATCH] Update test patch
 
 ---
+ test/legacy_test/test_adamw_op.py                 | 22 ++++++++++++++--------
  test/legacy_test/test_api_compatibility_part3.py | 4 ++--
  test/legacy_test/test_randint_op.py              | 2 +-
- 2 files changed, 3 insertions(+), 3 deletions(-)
+ 3 files changed, 17 insertions(+), 11 deletions(-)
 
 diff --git a/test/legacy_test/test_api_compatibility_part3.py b/test/legacy_test/test_api_compatibility_part3.py
 index 0d9ad7b79c..e448ca1549 100644
@@ -36,5 +37,108 @@ index 7fb866b75d..7bd6b809f2 100644
              return
  
          print("Test Fixed Random number on GPU------>")
+diff --git a/test/legacy_test/test_adamw_op.py b/test/legacy_test/test_adamw_op.py
+index 143ae66104..3ae4fae7b7 100644
+--- a/test/legacy_test/test_adamw_op.py
++++ b/test/legacy_test/test_adamw_op.py
+@@ -31,6 +31,10 @@ from paddle import base, nn
+ from paddle.framework import core
+ 
+ 
++def _adamw_lr_dtype():
++    return "float32" if get_device().startswith("iluvatar_gpu") else "float64"
++
++
+ def adamw_step(inputs, attributes):
+     param = inputs['Param']
+     grad = inputs['Grad']
+@@ -154,7 +158,7 @@ class TestAdamW(OpTest):
+             'Moment1': moment1,
+             'Moment2': moment2,
+             'Moment2Max': moment2_max,
+-            'LearningRate': np.array([learning_rate]).astype("float64"),
++            'LearningRate': np.array([learning_rate]).astype(_adamw_lr_dtype()),
+             'Beta1Pow': np.array([beta1_pow]).astype("float32"),
+             'Beta2Pow': np.array([beta2_pow]).astype("float32"),
+         }
+@@ -236,7 +240,7 @@ class TestAdamW2(OpTest):
+             'Moment1': moment1,
+             'Moment2': moment2,
+             'Moment2Max': moment2_max,
+-            'LearningRate': np.array([learning_rate]).astype("float64"),
++            'LearningRate': np.array([learning_rate]).astype(_adamw_lr_dtype()),
+             'Beta1Pow': np.array([beta1_pow]).astype("float32"),
+             'Beta2Pow': np.array([beta2_pow]).astype("float32"),
+         }
+@@ -355,6 +359,7 @@ class TestAdamWOp(unittest.TestCase):
+                 epsilon=1e-8,
+                 amsgrad=self.amsgrad,
+             )
++            opt.get_lr_dtype = lambda: paddle.float64
+             opt.minimize(loss)
+ 
+         exe.run(startup)
+@@ -431,6 +436,7 @@ class TestAdamWOp(unittest.TestCase):
+                     epsilon=1e-8,
+                     amsgrad=self.amsgrad,
+                 )
++                opt.get_lr_dtype = lambda: paddle.float64
+                 opt.minimize(loss)
+ 
+             exe.run(startup)
+@@ -572,7 +578,7 @@ class TestAdamWOpMultiPrecisionWithMainGrad(unittest.TestCase):
+         moment1 = paddle.randn(shape).astype(paddle.float32)
+         moment2 = paddle.randn(shape).astype(paddle.float32).abs()
+         moment2_max = paddle.zeros(shape).astype(paddle.float32)
+-        lr = paddle.zeros([1]).astype(paddle.float64)
++        lr = paddle.zeros([1], dtype=_adamw_lr_dtype())
+         lr[0] = lr_rate
+         beta1_pow_acc = paddle.ones([1]).astype(paddle.float32)
+         beta1_pow_acc[0] = _beta1**10
+@@ -1000,7 +1006,7 @@ class TestAdamWOpLayerwiseLR(TestAdamWOp):
+                 'Moment1': moment1,
+                 'Moment2': moment2,
+                 'Moment2Max': moment2_max,
+-                'LearningRate': np.array([learning_rate]).astype("float64"),
++                'LearningRate': np.array([learning_rate]).astype(_adamw_lr_dtype()),
+                 'Beta1Pow': np.array([beta1**t]).astype("float32"),
+                 'Beta2Pow': np.array([beta2**t]).astype("float32"),
+             }
+@@ -1172,7 +1178,7 @@ class TestAdamWOpLayerwiseLR(TestAdamWOp):
+                     'Moment1': moment1,
+                     'Moment2': moment2,
+                     'Moment2Max': moment2_max,
+-                    'LearningRate': np.array([learning_rate]).astype("float64"),
++                    'LearningRate': np.array([learning_rate]).astype(_adamw_lr_dtype()),
+                     'Beta1Pow': np.array([beta1**t]).astype("float32"),
+                     'Beta2Pow': np.array([beta2**t]).astype("float32"),
+                 }
+@@ -1386,7 +1392,7 @@ class TestAdamWOpLayerwiseLR(TestAdamWOp):
+                     'Moment1': moment1,
+                     'Moment2': moment2,
+                     'Moment2Max': moment2_max,
+-                    'LearningRate': np.array([learning_rate]).astype("float64"),
++                    'LearningRate': np.array([learning_rate]).astype(_adamw_lr_dtype()),
+                     'Beta1Pow': np.array([beta1**t]).astype("float32"),
+                     'Beta2Pow': np.array([beta2**t]).astype("float32"),
+                 }
+@@ -1608,7 +1614,7 @@ class TestAdamWOpLayerwiseLR(TestAdamWOp):
+                 'Moment1': moment1,
+                 'Moment2': moment2,
+                 'Moment2Max': moment2_max,
+-                'LearningRate': np.array([learning_rate]).astype("float64"),
++                'LearningRate': np.array([learning_rate]).astype(_adamw_lr_dtype()),
+                 'Beta1Pow': np.array([beta1**t]).astype("float32"),
+                 'Beta2Pow': np.array([beta2**t]).astype("float32"),
+             }
+@@ -1814,7 +1820,7 @@ class TestAdamwMomentBfloat16Amp(unittest.TestCase):
+         moment1 = paddle.randn(shape).astype(paddle.bfloat16)
+         moment2 = paddle.randn(shape).astype(paddle.bfloat16).abs()
+         moment2_max = paddle.zeros(shape).astype(paddle.bfloat16)
+-        lr = paddle.zeros([1]).astype(paddle.float64)
++        lr = paddle.zeros([1], dtype=_adamw_lr_dtype())
+         lr[0] = lr_rate
+         beta1_pow_acc = paddle.ones([1]).astype(paddle.float32)
+         beta1_pow_acc[0] = _beta1**10
 -- 
 2.25.1
