@@ -1,7 +1,7 @@
-From ab177fb749c6d31a5625d88b4f50ed55f476d56f Mon Sep 17 00:00:00 2001
-From: tianyuzhou668 <tianyu.zhou@iluvatar.com>
-Date: Tue, 12 May 2026 16:50:16 +0800
-Subject: [PATCH] Update paddle
+From 145b950a091bd84d3f48929bab8845613cc6f054 Mon Sep 17 00:00:00 2001
+From: tianyuzhou668 <2431054748@qq.com>
+Date: Mon, 18 May 2026 10:36:14 +0800
+Subject: [PATCH] update
 
 ---
  cmake/external/warpctc.cmake                  | 12 ++-
@@ -32,7 +32,7 @@ Subject: [PATCH] Update paddle
  paddle/phi/core/utils/data_type.h             |  2 +-
  paddle/phi/kernels/funcs/activation_functor.h | 20 ++++
  paddle/phi/kernels/funcs/affine_grid_utils.h  |  2 +
- paddle/phi/kernels/funcs/blas/blas_impl.cu.h  | 18 +++-
+ paddle/phi/kernels/funcs/blas/blas_impl.cu.h  | 22 ++++-
  paddle/phi/kernels/funcs/cufft_util.h         | 80 ++++++++++++++++
  paddle/phi/kernels/funcs/layer_norm_impl.cu.h |  4 -
  paddle/phi/kernels/funcs/math_cuda_utils.h    |  8 +-
@@ -44,7 +44,6 @@ Subject: [PATCH] Update paddle
  .../phi/kernels/funcs/top_k_function_cuda.h   | 91 +++++++++++--------
  .../fusion/gpu/fused_layernorm_kernel.cu      |  4 -
  .../fused_layernorm_residual_dropout_bias.h   | 17 ----
- paddle/phi/kernels/gpu/adamw_kernel.cu        | 30 +++---
  .../phi/kernels/gpu/batch_norm_grad_kernel.cu |  2 +-
  paddle/phi/kernels/gpu/batch_norm_kernel.cu   | 11 ++-
  paddle/phi/kernels/gpu/elementwise_grad.h     |  4 +
@@ -63,15 +62,16 @@ Subject: [PATCH] Update paddle
  paddle/phi/kernels/squeeze_kernel.cc          |  2 +
  paddle/phi/kernels/strided_slice_kernel.cc    |  2 +
  paddle/phi/kernels/unsqueeze_kernel.cc        |  2 +
- 59 files changed, 530 insertions(+), 160 deletions(-)
+ python/paddle/optimizer/adamw.py              |  2 ++
+ 59 files changed, 520 insertions(+), 146 deletions(-)
  create mode 100644 paddle/phi/backends/c_nvtx_lib.h
 
 diff --git a/cmake/external/warpctc.cmake b/cmake/external/warpctc.cmake
-index 17ef70b4a0..e70bd507b3 100644
+index 02e48a1edd..9c1f81b83d 100644
 --- a/cmake/external/warpctc.cmake
 +++ b/cmake/external/warpctc.cmake
-@@ -56,6 +56,11 @@ if(WITH_ROCM)
-       -p1 < ${PADDLE_SOURCE_DIR}/patches/warpctc/hip.cmake.patch)
+@@ -76,6 +76,11 @@ if(WITH_ROCM)
+   endif()
  endif()
  
 +
@@ -82,7 +82,7 @@ index 17ef70b4a0..e70bd507b3 100644
  set(WARPCTC_INCLUDE_DIR
      "${WARPCTC_INSTALL_DIR}/include"
      CACHE PATH "Warp-ctc Directory" FORCE)
-@@ -121,6 +126,9 @@ ExternalProject_Add(
+@@ -141,6 +146,9 @@ ExternalProject_Add(
    COMMAND ${WARPCTC_PATCH_COMMAND}
    COMMAND ${WARPCTC_PATCH_CUDA_COMMAND}
    COMMAND ${WARPCTC_PATCH_ROCM_COMMAND}
@@ -92,13 +92,14 @@ index 17ef70b4a0..e70bd507b3 100644
    #BUILD_ALWAYS    1
    CMAKE_ARGS -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
               -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
-@@ -131,9 +139,9 @@ ExternalProject_Add(
+@@ -151,10 +159,10 @@ ExternalProject_Add(
               -DCMAKE_CXX_FLAGS_RELEASE=${WARPCTC_CXX_FLAGS_RELEASE}
               -DCMAKE_CXX_FLAGS_DEBUG=${WARPCTC_CXX_FLAGS_DEBUG}
               -DCMAKE_INSTALL_PREFIX=${WARPCTC_INSTALL_DIR}
 -             -DWITH_GPU=${WITH_GPU}
 +             -DWITH_GPU=ON
               -DWITH_ROCM=${WITH_ROCM}
+              ${WARPCTC_ROCM_CMAKE_ARGS}
 -             -DWITH_OMP=${USE_OMP}
 +             -DWITH_OMP=OFF
               -DNVCC_FLAGS_EXTRA=${NVCC_FLAGS_EXTRA}
@@ -647,10 +648,10 @@ index f4b268b14c..dec2e6ea8c 100644
  #endif
    PD_NCCL_DTYPE_TO_STR(ncclDouble, "float64");
 diff --git a/paddle/phi/core/enforce.h b/paddle/phi/core/enforce.h
-index d07575028c..d4155eebf6 100644
+index 610869558b..ae80ea7759 100644
 --- a/paddle/phi/core/enforce.h
 +++ b/paddle/phi/core/enforce.h
-@@ -97,7 +97,7 @@ inline bool is_error(bool stat) { return !stat; }
+@@ -100,7 +100,7 @@ inline bool is_error(bool stat) { return !stat; }
  
  PADDLE_API void ThrowWarnInternal(const std::string& message);
  
@@ -659,7 +660,7 @@ index d07575028c..d4155eebf6 100644
  // For cuda, the assertions can affect performance and it is therefore
  // recommended to disable them in production code
  // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#assertion
-@@ -112,6 +112,10 @@ PADDLE_API void ThrowWarnInternal(const std::string& message);
+@@ -115,6 +115,10 @@ PADDLE_API void ThrowWarnInternal(const std::string& message);
        asm("trap;");                                                \
      }                                                              \
    } while (0)
@@ -762,7 +763,7 @@ index e26a3dad55..3f49ff99bc 100644
  #include "paddle/phi/kernels/funcs/math_function.h"
  
 diff --git a/paddle/phi/kernels/funcs/blas/blas_impl.cu.h b/paddle/phi/kernels/funcs/blas/blas_impl.cu.h
-index f13c42e5e4..a432c01bd0 100644
+index f13c42e5e4..e814929427 100644
 --- a/paddle/phi/kernels/funcs/blas/blas_impl.cu.h
 +++ b/paddle/phi/kernels/funcs/blas/blas_impl.cu.h
 @@ -1753,7 +1753,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
@@ -790,7 +791,32 @@ index f13c42e5e4..a432c01bd0 100644
  
    float h_alpha = static_cast<float>(alpha);
    float h_beta = static_cast<float>(beta);
-@@ -2291,12 +2293,13 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
+@@ -1854,7 +1856,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
+                                         const phi::bfloat16 *B,
+                                         float beta,
+                                         phi::bfloat16 *C) const {
+-#if CUDA_VERSION >= 11000
++#if CUDA_VERSION >= 11000 || defined(PADDLE_WITH_COREX)
+   // Note that cublas follows fortran order, so the order is different from
+   // the cblas convention.
+   int64_t lda = (transA == CblasNoTrans) ? K : M;
+@@ -1864,6 +1866,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
+   cublasOperation_t cuTransB =
+       (transB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+ 
++#ifndef PADDLE_WITH_COREX
+   PADDLE_ENFORCE_GE(
+       dev_ctx_.GetComputeCapability(),
+       80,
+@@ -1871,6 +1874,7 @@ inline void Blas<phi::GPUContext>::GEMM(CBLAS_TRANSPOSE transA,
+           "cublas bf16 gemm requires GPU compute capability >= 80,"
+           "but received %d",
+           dev_ctx_.GetComputeCapability()));
++#endif
+ 
+   float h_alpha = alpha;
+   float h_beta = beta;
+@@ -2291,12 +2295,13 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
                                          phi::bfloat16 beta,
                                          phi::bfloat16 *C,
                                          int ldc) const {
@@ -805,7 +831,7 @@ index f13c42e5e4..a432c01bd0 100644
    PADDLE_ENFORCE_GE(
        dev_ctx_.GetComputeCapability(),
        80,
-@@ -2304,6 +2307,7 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
+@@ -2304,6 +2309,7 @@ inline void Blas<phi::GPUContext>::GEMM(bool transA,
            "cublas bf16 gemm requires GPU compute capability >= 80,"
            "but received %d",
            dev_ctx_.GetComputeCapability()));
@@ -813,7 +839,7 @@ index f13c42e5e4..a432c01bd0 100644
  
    float h_alpha = static_cast<float>(alpha);
    float h_beta = static_cast<float>(beta);
-@@ -2800,7 +2804,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -2800,7 +2806,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
                                                 int64_t batchCount,
                                                 int64_t strideA,
                                                 int64_t strideB) const {
@@ -822,7 +848,7 @@ index f13c42e5e4..a432c01bd0 100644
    // Note that cublas follows fortran order, so the order is different from
    // the cblas convention.
    int64_t lda = (transA == CblasNoTrans) ? K : M;
-@@ -2879,7 +2883,11 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -2879,7 +2885,11 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
                                                     static_cast<int>(ldc),
                                                     strideC,
                                                     static_cast<int>(batchCount),
@@ -834,7 +860,7 @@ index f13c42e5e4..a432c01bd0 100644
                                                     algo));
      });
    }
-@@ -3173,7 +3181,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -3173,7 +3183,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
                                                 phi::bfloat16 beta,
                                                 phi::bfloat16 **C,
                                                 int batchCount) const {
@@ -843,7 +869,7 @@ index f13c42e5e4..a432c01bd0 100644
    // Note that cublas follows fortran order, so the order is different from
    // the cblas convention.
    int lda = (transA == CblasNoTrans) ? K : M;
-@@ -3184,6 +3192,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -3184,6 +3194,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
    cublasOperation_t cuTransB =
        (transB == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
  
@@ -851,7 +877,7 @@ index f13c42e5e4..a432c01bd0 100644
    PADDLE_ENFORCE_GE(
        dev_ctx_.GetComputeCapability(),
        80,
-@@ -3191,6 +3200,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
+@@ -3191,6 +3202,7 @@ inline void Blas<phi::GPUContext>::BatchedGEMM(CBLAS_TRANSPOSE transA,
            "cublas bf16 gemm requires GPU compute capability >= 80,"
            "but received %d",
            dev_ctx_.GetComputeCapability()));
@@ -1049,10 +1075,10 @@ index dff1033db4..e7d4bd556b 100644
  
    return val;
 diff --git a/paddle/phi/kernels/funcs/mode.h b/paddle/phi/kernels/funcs/mode.h
-index db2dfa35c6..5944276dac 100644
+index 5fac6a843d..83e50d99f1 100644
 --- a/paddle/phi/kernels/funcs/mode.h
 +++ b/paddle/phi/kernels/funcs/mode.h
-@@ -29,9 +29,6 @@
+@@ -50,9 +50,6 @@ struct define<phi::bfloat16> {
  #include <cmath>
  #include <utility>
  #include <vector>
@@ -1176,10 +1202,10 @@ index a28743d2b7..e79f718696 100644
  namespace phi {
  namespace funcs {
 diff --git a/paddle/phi/kernels/funcs/top_k_function_cuda.h b/paddle/phi/kernels/funcs/top_k_function_cuda.h
-index d9209f8c67..4c3f25fc69 100644
+index edada55e54..9edda91083 100644
 --- a/paddle/phi/kernels/funcs/top_k_function_cuda.h
 +++ b/paddle/phi/kernels/funcs/top_k_function_cuda.h
-@@ -31,7 +31,7 @@ limitations under the License. */
+@@ -32,7 +32,7 @@ limitations under the License. */
  #include "paddle/phi/kernels/primitive/functor_primitives.h"
  
  #define FINAL_MASK 0xffffffff
@@ -1188,7 +1214,7 @@ index d9209f8c67..4c3f25fc69 100644
  #define WARP_SIZE 64
  #else
  #define WARP_SIZE 32
-@@ -128,7 +128,11 @@ inline static int GetDesiredBlockDim(int dim) {
+@@ -148,7 +148,11 @@ inline static int GetDesiredBlockDim(int dim) {
    } else if (dim > 32) {
      return 64;
    } else {
@@ -1200,7 +1226,7 @@ index d9209f8c67..4c3f25fc69 100644
    }
  }
  
-@@ -136,7 +140,7 @@ inline static int getMaxLength(int k) {
+@@ -156,7 +160,7 @@ inline static int getMaxLength(int k) {
    if (k / 5 < 1) {
      return 1;
    } else if (k / 5 >= 1) {
@@ -1209,7 +1235,7 @@ index d9209f8c67..4c3f25fc69 100644
    }
  }
  
-@@ -284,9 +288,9 @@ __device__ __forceinline__ void ThreadGetTopK(Pair<T> topk[],
+@@ -304,9 +308,9 @@ __device__ __forceinline__ void ThreadGetTopK(Pair<T> topk[],
            topk[k] = topk[k + *beam];
          } else {
            if (largest) {
@@ -1221,7 +1247,7 @@ index d9209f8c67..4c3f25fc69 100644
            }
          }
        }
-@@ -356,11 +360,11 @@ __device__ __forceinline__ void BlockReduce(Pair<T> shared_max[],
+@@ -376,11 +380,11 @@ __device__ __forceinline__ void BlockReduce(Pair<T> shared_max[],
      if (largest) {
        input_now = (tid < BlockSize / WARP_SIZE)
                        ? shared_max[lane]
@@ -1235,7 +1261,7 @@ index d9209f8c67..4c3f25fc69 100644
      }
      if (wid == 0) {
        input_now = WarpReduce(input_now, largest);
-@@ -430,9 +434,9 @@ __global__ void KeMatrixTopK(T* output,
+@@ -450,9 +454,9 @@ __global__ void KeMatrixTopK(T* output,
  
      for (int j = 0; j < MaxLength; j++) {
        if (largest) {
@@ -1247,7 +1273,7 @@ index d9209f8c67..4c3f25fc69 100644
        }
      }
      while (top_num) {
-@@ -475,18 +479,26 @@ struct Bitfield<unsigned int> {
+@@ -495,18 +499,26 @@ struct Bitfield<unsigned int> {
    static __device__ __forceinline__ unsigned int GetBitfield(unsigned int val,
                                                               int pos,
                                                               int len) {
@@ -1282,7 +1308,7 @@ index d9209f8c67..4c3f25fc69 100644
    }
  };
  
-@@ -495,20 +507,28 @@ struct Bitfield<uint64_t> {
+@@ -515,20 +527,28 @@ struct Bitfield<uint64_t> {
    static __device__ __forceinline__ uint64_t GetBitfield(uint64_t val,
                                                           int pos,
                                                           int len) {
@@ -1319,7 +1345,7 @@ index d9209f8c67..4c3f25fc69 100644
    }
  };
  
-@@ -624,15 +644,12 @@ struct RadixTypeConfig<phi::bfloat16> {
+@@ -644,15 +664,12 @@ struct RadixTypeConfig<phi::bfloat16> {
  
  /*---------------------------Helper Functions------------------*/
  __device__ __forceinline__ int GetLaneId() {
@@ -1338,7 +1364,7 @@ index d9209f8c67..4c3f25fc69 100644
  }
  
  template <typename T, bool KillDependency, class Function>
-@@ -644,7 +661,7 @@ __device__ void InclusiveBinaryPrefixScan(T* shared_mem,
+@@ -664,7 +681,7 @@ __device__ void InclusiveBinaryPrefixScan(T* shared_mem,
    T index = __popc(GetLaneMaskLe() & vote);
    T carry = __popc(vote);
  
@@ -1347,7 +1373,7 @@ index d9209f8c67..4c3f25fc69 100644
  
    if (GetLaneId() == 0) {
      shared_mem[warp] = carry;
-@@ -654,7 +671,7 @@ __device__ void InclusiveBinaryPrefixScan(T* shared_mem,
+@@ -674,7 +691,7 @@ __device__ void InclusiveBinaryPrefixScan(T* shared_mem,
  
    if (threadIdx.x == 0) {
      int current = 0;
@@ -1356,7 +1382,7 @@ index d9209f8c67..4c3f25fc69 100644
        T v = shared_mem[i];
        shared_mem[i] = func(shared_mem[i], current);
        current = func(current, v);
-@@ -681,7 +698,7 @@ __device__ void ExclusiveBinaryPrefixScan(
+@@ -701,7 +718,7 @@ __device__ void ExclusiveBinaryPrefixScan(
  
    *out -= (T)in;
  
@@ -1365,7 +1391,7 @@ index d9209f8c67..4c3f25fc69 100644
  
    if (KillDependency) {
      __syncthreads();
-@@ -758,7 +775,7 @@ __device__ void RadixCountUsingMask(const T* input,
+@@ -778,7 +795,7 @@ __device__ void RadixCountUsingMask(const T* input,
  #pragma unroll
      for (uint32_t j = 0; j < RadixSize; ++j) {
        bool vote = has_val && (digit_in_radix == j);
@@ -1374,7 +1400,7 @@ index d9209f8c67..4c3f25fc69 100644
      }
    }
  
-@@ -882,10 +899,10 @@ __global__ void GatherKthValue(const T* input,
+@@ -902,10 +919,10 @@ __global__ void GatherKthValue(const T* input,
  
    // 1. Find the k-th value
    T kth_value = static_cast<T>(0);
@@ -1387,7 +1413,7 @@ index d9209f8c67..4c3f25fc69 100644
    if (threadIdx.x == 0) {
      block_min_idx = num_cols;
    }
-@@ -898,7 +915,7 @@ __global__ void GatherKthValue(const T* input,
+@@ -918,7 +935,7 @@ __global__ void GatherKthValue(const T* input,
          ((v == kth_value) || (isnan(static_cast<float>(v)) &&
                                isnan(static_cast<float>(kth_value))));
      if (isKValue) {
@@ -1466,67 +1492,6 @@ index 8dd3ddc2b5..2625937acd 100644
            mask_vec[it][jt] = static_cast<MaskType>(rand[jt] >= dropout_prob);
          }
        }
-diff --git a/paddle/phi/kernels/gpu/adamw_kernel.cu b/paddle/phi/kernels/gpu/adamw_kernel.cu
-index 73a9f41e09..235b1c3f4a 100644
---- a/paddle/phi/kernels/gpu/adamw_kernel.cu
-+++ b/paddle/phi/kernels/gpu/adamw_kernel.cu
-@@ -426,11 +426,11 @@ template <typename T,        // Parameter type (may be fp16/bf16)
-                              // float/fp16/bf16)
-           typename TM = MT>  // Moment estimation type (default = MT, can be
-                              // bfloat16)
--__global__ void AdamWStyleKernel(const double beta1,
--                                 const double beta2,
--                                 const double epsilon,
--                                 const double weight_decay,
--                                 const double lr_double,
-+__global__ void AdamWStyleKernel(const float beta1,
-+                                 const float beta2,
-+                                 const float epsilon,
-+                                 const float weight_decay,
-+                                 const float lr_double,
-                                  const TG* __restrict__ grad,
-                                  const T* __restrict__ param,
-                                  T* __restrict__ param_out,
-@@ -451,9 +451,9 @@ __global__ void AdamWStyleKernel(const double beta1,
-                                  bool amsgrad) {
-   // These are then passed to adam_math as const opmath_t& (float), truncating
-   // at call boundary.
--  const double bc1_dbl = 1.0 - torch_pow_(beta1, step_count);
--  const double bc2_dbl = 1.0 - torch_pow_(beta2, step_count);
--  const double bc2_sqrt_dbl = ::sqrt(bc2_dbl);
-+  const float bc1_dbl = 1.0 - torch_pow_(beta1, step_count);
-+  const float bc2_dbl = 1.0 - torch_pow_(beta2, step_count);
-+  const float bc2_sqrt_dbl = ::sqrt(bc2_dbl);
-   // Truncate to opmath_t (float) at the "adam_math call boundary", matching
-   // torch exactly
-   const MT bias_correction1 = static_cast<MT>(bc1_dbl);
-@@ -480,9 +480,9 @@ __global__ void AdamWStyleKernel(const double beta1,
-     // We explicitly use __fma_rn to match: first compute (1-beta1)*g (rounded),
-     // then fma(beta1, exp_avg_double, rounded_result).
-     {
--      double g_d = static_cast<double>(g);
--      double exp_avg_d = static_cast<double>(exp_avg);
--      double one_minus_beta1_times_g = __dmul_rn(1.0 - beta1, g_d);
-+      float g_d = static_cast<float>(g);
-+      float exp_avg_d = static_cast<float>(exp_avg);
-+      float one_minus_beta1_times_g = __dmul_rn(1.0 - beta1, g_d);
-       exp_avg =
-           static_cast<MT>(__fma_rn(beta1, exp_avg_d, one_minus_beta1_times_g));
-     }
-@@ -490,10 +490,10 @@ __global__ void AdamWStyleKernel(const double beta1,
-     // exp_avg_sq = beta2 * exp_avg_sq + (1 - beta2) * grad * grad
-     // Match torch: ((1-beta2)*g)*g is computed left-to-right, then fma'd.
-     {
--      double g_d = static_cast<double>(g);
--      double exp_avg_sq_d = static_cast<double>(exp_avg_sq);
--      double one_minus_beta2_times_g = __dmul_rn(1.0 - beta2, g_d);
--      double grad_sq_term = __dmul_rn(one_minus_beta2_times_g, g_d);
-+      float g_d = static_cast<float>(g);
-+      float exp_avg_sq_d = static_cast<float>(exp_avg_sq);
-+      float one_minus_beta2_times_g = __dmul_rn(1.0 - beta2, g_d);
-+      float grad_sq_term = __dmul_rn(one_minus_beta2_times_g, g_d);
-       exp_avg_sq = static_cast<MT>(__fma_rn(beta2, exp_avg_sq_d, grad_sq_term));
-     }
  
 diff --git a/paddle/phi/kernels/gpu/batch_norm_grad_kernel.cu b/paddle/phi/kernels/gpu/batch_norm_grad_kernel.cu
 index abb3423699..5dd8c2123b 100644
@@ -2009,5 +1974,18 @@ index ffdf995ece..4a7e03f4ad 100644
  #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
  PD_REGISTER_KERNEL(unsqueeze,
                     GPU,
+diff --git a/python/paddle/optimizer/adamw.py b/python/paddle/optimizer/adamw.py
+index 76c95d02a4..0dacf1cefd 100644
+--- a/python/paddle/optimizer/adamw.py
++++ b/python/paddle/optimizer/adamw.py
+@@ -337,6 +337,8 @@ class AdamW(Optimizer):
+             return None
+ 
+     def get_lr_dtype(self) -> paddle.dtype:
++        if paddle.get_device().startswith("iluvatar_gpu"):
++            return paddle.float32
+         return paddle.float64
+ 
+     def _add_param_group(self, param_group):
 -- 
 2.25.1

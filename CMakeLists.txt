@@ -255,7 +255,6 @@ file(
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/adagrad_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/adam_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/adamax_kernel.cu
-  ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/adamw_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/add_n_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/addmm_grad_kernel.cu
   ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/gpu/addmm_kernel.cu
