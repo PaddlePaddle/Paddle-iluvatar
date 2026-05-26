@@ -1,6 +1,6 @@
-From 145b950a091bd84d3f48929bab8845613cc6f054 Mon Sep 17 00:00:00 2001
-From: tianyuzhou668 <2431054748@qq.com>
-Date: Mon, 18 May 2026 10:36:14 +0800
+From 257125034189ef19d4442bbb47fa79f45a7428c0 Mon Sep 17 00:00:00 2001
+From: tianyuzhou669 <tianyu.zhou@iluvatar.com>
+Date: Tue, 26 May 2026 13:45:57 +0800
 Subject: [PATCH] update
 
 ---
@@ -53,7 +53,7 @@ Subject: [PATCH] update
  .../kernels/gpu/interpolate_grad_kernel.cu    | 12 +--
  .../phi/kernels/gpu/layer_norm_grad_kernel.cu |  2 +-
  paddle/phi/kernels/gpu/layer_norm_kernel.cu   |  2 +-
- paddle/phi/kernels/gpudnn/conv_cudnn_v7.h     | 78 ++++++++++++----
+ paddle/phi/kernels/gpudnn/conv_cudnn_v7.h     |  2 +-
  paddle/phi/kernels/gpudnn/softmax_gpudnn.h    |  9 +-
  paddle/phi/kernels/gpudnn/softmax_kernel.cu   |  2 +-
  .../kernels/primitive/compute_primitives.h    | 24 ++---
@@ -62,8 +62,8 @@ Subject: [PATCH] update
  paddle/phi/kernels/squeeze_kernel.cc          |  2 +
  paddle/phi/kernels/strided_slice_kernel.cc    |  2 +
  paddle/phi/kernels/unsqueeze_kernel.cc        |  2 +
- python/paddle/optimizer/adamw.py              |  2 ++
- 59 files changed, 520 insertions(+), 146 deletions(-)
+ python/paddle/optimizer/adamw.py              |  2 +
+ 59 files changed, 460 insertions(+), 130 deletions(-)
  create mode 100644 paddle/phi/backends/c_nvtx_lib.h
 
 diff --git a/cmake/external/warpctc.cmake b/cmake/external/warpctc.cmake
@@ -1492,7 +1492,6 @@ index 8dd3ddc2b5..2625937acd 100644
            mask_vec[it][jt] = static_cast<MaskType>(rand[jt] >= dropout_prob);
          }
        }
- 
 diff --git a/paddle/phi/kernels/gpu/batch_norm_grad_kernel.cu b/paddle/phi/kernels/gpu/batch_norm_grad_kernel.cu
 index abb3423699..5dd8c2123b 100644
 --- a/paddle/phi/kernels/gpu/batch_norm_grad_kernel.cu
@@ -1658,107 +1657,10 @@ index 42d3cde8c7..12a2d25e58 100644
                     GPU,
                     ALL_LAYOUT,
 diff --git a/paddle/phi/kernels/gpudnn/conv_cudnn_v7.h b/paddle/phi/kernels/gpudnn/conv_cudnn_v7.h
-index cc5700e259..8c6375a08b 100644
+index 556de0bbaf..de4feb79f6 100644
 --- a/paddle/phi/kernels/gpudnn/conv_cudnn_v7.h
 +++ b/paddle/phi/kernels/gpudnn/conv_cudnn_v7.h
-@@ -152,15 +152,29 @@ struct SearchAlgorithmBase<ConvKind::kForward> {
-     result.workspace_size = perf_results[best_algo_idx].memory;
- 
-     if (result.workspace_size > workspace_size_limit) {
--      VLOG(4) << GetPerfResultString<PerfT>("[Heuristic] FwdAlgo Perf result",
--                                            perf_results,
--                                            actual_perf_count,
--                                            workspace_size_limit);
--      // cudnnGetConvolutionForwardAlgorithm is removed in CUDNN-8
--      ChooseAlgoByWorkspace<PerfT, AlgoT>(
--          perf_results, workspace_size_limit, &result);
--    }
--
-+    //   VLOG(4) << GetPerfResultString<PerfT>("[Heuristic] FwdAlgo Perf result",
-+    //                                         perf_results,
-+    //                                         actual_perf_count,
-+    //                                         workspace_size_limit);
-+    //   // cudnnGetConvolutionForwardAlgorithm is removed in CUDNN-8
-+    //   ChooseAlgoByWorkspace<PerfT, AlgoT>(
-+    //       perf_results, workspace_size_limit, &result);
-+    // }
-+      VLOG(3) << "Fallback to non-v7 method to find conv algorithm "
-+                 "because the workspace size request("
-+              << result.workspace_size << ") exceeds the limit("
-+              << workspace_size_limit << ")";
-+      PADDLE_ENFORCE_GPU_SUCCESS(
-+          phi::dynload::cudnnGetConvolutionForwardAlgorithm(
-+              args.handle,
-+              args.idesc.desc(),
-+              args.wdesc.desc(),
-+              args.cdesc.desc(),
-+              args.odesc.desc(),
-+              CUDNN_CONVOLUTION_FWD_SPECIFY_WORKSPACE_LIMIT,
-+              workspace_size_limit,
-+              &(result.algo)));
-+          }
-     result.workspace_size = GetWorkspaceSize(args, result.algo);
-     return result;
-   }
-@@ -299,10 +313,25 @@ struct SearchAlgorithmBase<ConvKind::kBackwardData> {
- 
-     result.workspace_size = GetWorkspaceSize(args, result.algo);
-     if (result.workspace_size > workspace_size_limit) {
--      // cudnnGetConvolutionBackwardDataAlgorithm is removed in CUDNN-8
--      ChooseAlgoByWorkspace<PerfT, AlgoT>(
--          perf_results, workspace_size_limit, &result);
--    }
-+    //   // cudnnGetConvolutionBackwardDataAlgorithm is removed in CUDNN-8
-+    //   ChooseAlgoByWorkspace<PerfT, AlgoT>(
-+    //       perf_results, workspace_size_limit, &result);
-+    // }
-+          VLOG(1) << "Fallback to non-v7 method to find conv algorithm because "
-+                 "the workspace size request("
-+              << result.workspace_size << ") exceeds the limit("
-+              << workspace_size_limit << ")";
-+      PADDLE_ENFORCE_GPU_SUCCESS(
-+          phi::dynload::cudnnGetConvolutionBackwardDataAlgorithm(
-+              args.handle,
-+              args.wdesc.desc(),
-+              args.odesc.desc(),
-+              args.cdesc.desc(),
-+              args.idesc.desc(),
-+              CUDNN_CONVOLUTION_BWD_DATA_SPECIFY_WORKSPACE_LIMIT,
-+              workspace_size_limit,
-+              &(result.algo)));
-+          }
-     result.workspace_size = GetWorkspaceSize(args, result.algo);
-     return result;
-   }
-@@ -442,9 +471,24 @@ struct SearchAlgorithmBase<ConvKind::kBackwardFilter> {
- 
-     if (result.workspace_size > workspace_size_limit) {
-       // cudnnGetConvolutionBackwardFilterAlgorithm is removed in CUDNN-8
--      ChooseAlgoByWorkspace<PerfT, AlgoT>(
--          perf_results, workspace_size_limit, &result);
--    }
-+    //   ChooseAlgoByWorkspace<PerfT, AlgoT>(
-+    //       perf_results, workspace_size_limit, &result);
-+    // }
-+    VLOG(1) << "Fallback to non-v7 method to find conv algorithm because "
-+                 "the workspace size request("
-+              << result.workspace_size << ") exceeds the limit("
-+              << workspace_size_limit << ")";
-+      PADDLE_ENFORCE_GPU_SUCCESS(
-+          phi::dynload::cudnnGetConvolutionBackwardFilterAlgorithm(
-+              args.handle,
-+              args.idesc.desc(),
-+              args.odesc.desc(),
-+              args.cdesc.desc(),
-+              args.wdesc.desc(),
-+              CUDNN_CONVOLUTION_BWD_FILTER_SPECIFY_WORKSPACE_LIMIT,
-+              workspace_size_limit,
-+              &(result.algo)));
-+          }
- 
-     result.workspace_size = GetWorkspaceSize(args, result.algo);
-     return result;
-@@ -647,7 +691,7 @@ struct SearchAlgorithm : public SearchAlgorithmBase<CK> {
+@@ -648,7 +648,7 @@ struct SearchAlgorithm : public SearchAlgorithmBase<CK> {
      } else if (dtype == CUDNN_DATA_FLOAT && !cdesc.allow_tf32_) {
        VLOG(5) << "Disable TensorFloat (Tensor Core) for FLOAT";
        PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cudnnSetConvolutionMathType(

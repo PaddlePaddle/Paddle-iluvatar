@@ -33,6 +33,8 @@ ILUVATAR_BUILD_DIR="${PADDLE_BUILD_DIR}/custom_device_build"
 PATCH_FILE="${SCRIPT_DIR}/patches/paddle-corex.patch"
 STATE_FILE="${SCRIPT_DIR}/.build_state"
 
+REVERT_COMMIT="f4014bfa7b9acddfcfcaffb57b57b2a5c8fe9e7a"
+
 BUILD_WITH_FLAGCX=0
 FLAGCX_ROOT="/workspace/FlagCX"
 PLATFORM_ID=$(uname -i)
@@ -49,11 +51,7 @@ if [[ "$1" == "--clean" ]]; then
     rm -rf "$PADDLE_BUILD_DIR"
     echo "Removed build directory"
   fi
-  if [[ -d "${PADDLE_SOURCE_DIR}" && -f "${PATCH_FILE}" ]]; then
-    if git -C "${PADDLE_SOURCE_DIR}" apply --reverse --check "${PATCH_FILE}" &>/dev/null; then
-      git -C "${PADDLE_SOURCE_DIR}" apply --reverse "${PATCH_FILE}" && echo "Patch reverted" || true
-    fi
-  fi
+  
   _warpctc="${PADDLE_SOURCE_DIR}/third_party/warpctc"
   if [[ -d "${_warpctc}/.git" ]] || git -C "${_warpctc}" rev-parse --is-inside-work-tree &>/dev/null; then
     git -C "${_warpctc}" reset --hard &>/dev/null && echo "Restored Paddle/third_party/warpctc" || true
@@ -62,6 +60,30 @@ if [[ "$1" == "--clean" ]]; then
   if [[ -d "${_eigen}/.git" ]]; then
     git -C "${_eigen}" reset --hard &>/dev/null && echo "eigen reset" || true
   fi
+  
+  if [[ -d "${PADDLE_SOURCE_DIR}/.git" ]]; then
+    if [[ -f "$STATE_FILE" ]]; then
+      ORIGINAL_HEAD=$(grep "^ORIGINAL_HEAD=" "$STATE_FILE" | cut -d= -f2)
+      if [[ -n "$ORIGINAL_HEAD" ]]; then
+        echo "Resetting Paddle to original HEAD: $ORIGINAL_HEAD"
+        git -C "${PADDLE_SOURCE_DIR}" reset --hard "$ORIGINAL_HEAD" && echo "Reverted commit removed from history" || true
+      else
+        git -C "${PADDLE_SOURCE_DIR}" reset --hard HEAD && echo "Reset to HEAD" || true
+      fi
+    else
+      git -C "${PADDLE_SOURCE_DIR}" revert --abort &>/dev/null || true
+      git -C "${PADDLE_SOURCE_DIR}" reset --hard HEAD && echo "Reset to HEAD" || true
+    fi
+    
+    if [[ -f "${PATCH_FILE}" ]]; then
+      if git -C "${PADDLE_SOURCE_DIR}" apply --reverse --check "${PATCH_FILE}" &>/dev/null; then
+        git -C "${PADDLE_SOURCE_DIR}" apply --reverse "${PATCH_FILE}" && echo "Patch reverted" || true
+      fi
+    fi
+    
+    git -C "${PADDLE_SOURCE_DIR}" clean -fd &>/dev/null || true
+  fi
+
   [[ -f "$STATE_FILE" ]] && rm -f "$STATE_FILE" && echo "Removed state file"
   echo "Clean completed!"
   exit 0
@@ -69,6 +91,16 @@ fi
 
 if [[ ! -f "$STATE_FILE" ]]; then
   echo "First time build detected. Setting up environment..."
+  
+  ORIGINAL_HEAD=$(git -C "$PADDLE_SOURCE_DIR" rev-parse HEAD)
+  
+  echo "Reverting commit ${REVERT_COMMIT}..."
+  if ! git -C "$PADDLE_SOURCE_DIR" revert --no-edit "$REVERT_COMMIT"; then
+    echo "Error: Failed to revert commit ${REVERT_COMMIT}!"
+    exit 1
+  fi
+  echo "Commit reverted successfully!"
+
   if ! git -C "$PADDLE_SOURCE_DIR" apply --reverse --check "$PATCH_FILE" > /dev/null 2>&1; then
     if ! git -C "$PADDLE_SOURCE_DIR" apply "$PATCH_FILE"; then
       echo "Error: Failed to apply patch!"
@@ -76,10 +108,15 @@ if [[ ! -f "$STATE_FILE" ]]; then
     fi
     echo "Patch applied successfully!"
   fi
+  
   cp -r "${SCRIPT_DIR}/patches/eigen/Core" "${PADDLE_SOURCE_DIR}/third_party/eigen3/Eigen/Core"
   cp -r "${SCRIPT_DIR}/patches/eigen/Tensor" "${PADDLE_SOURCE_DIR}/third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
   cp -r "${SCRIPT_DIR}/patches/eigen/TensorAssign.h" "${PADDLE_SOURCE_DIR}/third_party/eigen3/unsupported/Eigen/CXX11/src/Tensor/TensorAssign.h"
+  
+  # 【修改】将原始 HEAD 写入状态文件
   echo "BUILD_ENV_SET=1" > "$STATE_FILE"
+  echo "ORIGINAL_HEAD=$ORIGINAL_HEAD" >> "$STATE_FILE"
+  
   echo "Environment setup completed"
 else
   echo "Incremental build detected. Skipping environment setup."
