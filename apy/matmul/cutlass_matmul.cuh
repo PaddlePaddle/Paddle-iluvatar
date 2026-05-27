@@ -47,6 +47,7 @@
 
 #include "default_config_id.h"
 #include "params.h"
+#include "helper.h"
 
 #define CHECK_CUTLASS(status)                                             \
   {                                                                       \
@@ -131,7 +132,7 @@ void MatmulAddVariadic(
   constexpr int AlignC = AlignB;
 
   using LayoutA = cutlass::layout::RowMajor;
-  using LayoutB = cutlass::layout::RowMajor;
+  using LayoutB = cutlass::layout::ColumnMajor;
   using LayoutC = cutlass::layout::RowMajor;
   using LayoutD = cutlass::layout::RowMajor;
 
@@ -267,10 +268,28 @@ void MatmulAddVariadic(
   auto stride_B = cutlass::make_cute_packed_stride(StrideB{}, cute::make_shape(n, k, l));
   auto stride_D = cutlass::make_cute_packed_stride(StrideD{}, cute::make_shape(m, n, l));
 
+  cudaStream_t* stream_ptr = reinterpret_cast<cudaStream_t*>(params.stream_ptr);
+
+  cutlass::device_memory::allocation<ElementB> packed_weight(
+      static_cast<size_t>(l) * n * k);
+  cudaError_t pack_status = LaunchPackBRowMajorToColumnMajor(
+      weight,
+      packed_weight.get(),
+      k,
+      n,
+      l,
+      params.shape_args.batch_stride_B,
+      *stream_ptr);
+  if (pack_status != cudaSuccess) {
+    std::cerr << "PackBRowMajorToColumnMajorKernel failed: "
+              << cudaGetErrorString(pack_status) << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   typename Gemm::Arguments arguments{
-    cutlass::gemm::GemmUniversalMode::kGemm,
+    GetGemmMode(l),
     problem_shape,
-    {input, stride_A, weight, stride_B},
+    {input, stride_A, packed_weight.get(), stride_B},
     {epilogue_op_args, output, stride_D},
     hw_info
   };
@@ -279,8 +298,6 @@ void MatmulAddVariadic(
 
   size_t workspace_size = Gemm::get_workspace_size(arguments);
   cutlass::device_memory::allocation<uint8_t> workspace(workspace_size);
-
-  cudaStream_t* stream_ptr = reinterpret_cast<cudaStream_t*>(params.stream_ptr);
 
   CHECK_CUTLASS(device_gemm.can_implement(arguments));
   CHECK_CUTLASS(device_gemm.initialize(arguments, workspace.get(), *stream_ptr));
