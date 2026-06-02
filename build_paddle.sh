@@ -32,6 +32,8 @@ PADDLE_BUILD_DIR="${PADDLE_SOURCE_DIR}/build"
 ILUVATAR_SOURCE_DIR="${CURRENT_DIR}"
 ILUVATAR_BUILD_DIR="${PADDLE_BUILD_DIR}/custom_device_build"
 PATCH_FILE="${CURRENT_DIR}/patches/paddle-corex.patch"
+REVERT_COMMIT="f4014bfa7b9acddfcfcaffb57b57b2a5c8fe9e7a"
+
 # set BUILD_WITH_FLAGCX to 1 if we want to use flagcx as communication backend
 BUILD_WITH_FLAGCX=0
 FLAGCX_ROOT="/workspace/FlagCX"
@@ -44,6 +46,15 @@ else
 fi
 
 bash clean_paddle.sh || { echo "Error: Failed to clean paddle!"; exit 1; }
+
+ORIGINAL_HEAD=$(git -C "$PADDLE_SOURCE_DIR" rev-parse HEAD)
+echo "$ORIGINAL_HEAD" > "${CURRENT_DIR}/.paddle_original_head"
+
+echo "Reverting commit ${REVERT_COMMIT}..."
+if ! git -C "$PADDLE_SOURCE_DIR" revert --no-edit "$REVERT_COMMIT"; then
+  echo "Error: Failed to revert commit ${REVERT_COMMIT}! Please check if it was already reverted or if there are conflicts."
+  exit 1
+fi
 
 if ! git -C "$PADDLE_SOURCE_DIR" apply --reverse --check "$PATCH_FILE" > /dev/null 2>&1; then
   if ! git -C "$PADDLE_SOURCE_DIR" apply "$PATCH_FILE"; then
@@ -117,6 +128,11 @@ if git -C "$PADDLE_SOURCE_DIR" apply --reverse --check "$PATCH_FILE" > /dev/null
   git -C "$PADDLE_SOURCE_DIR" apply --reverse "$PATCH_FILE" || { echo "Error: Failed to revert patch!"; exit 1; }
   echo "Patch successfully reverted!"
 fi
+
+echo "Removing revert commit from git history..."
+git -C "$PADDLE_SOURCE_DIR" reset --hard "$ORIGINAL_HEAD" || { echo "Error: Failed to reset to original HEAD!"; exit 1; }
+rm -f "${CURRENT_DIR}/.paddle_original_head"
+echo "Revert commit successfully removed!"
 
 _warpctc="${PADDLE_SOURCE_DIR}/third_party/warpctc"
 if [[ -d "${_warpctc}/.git" ]] || git -C "${_warpctc}" rev-parse --is-inside-work-tree &>/dev/null; then

@@ -267,6 +267,17 @@ __device__ inline float16 FN_FP16(max)(float16 a, float16 b) { return __hgt(a, b
 __device__ inline float16 FN_FP16(min)(float16 a, float16 b) { return __hlt(a, b) ? a : b; }
 
 // ===============================================================
+// BFloat16 Functions
+// ===============================================================
+#define FN_BF16(func) cinn_custom_device_##func##_bf16
+__device__ inline bfloat16 FN_BF16(tanh)(bfloat16 x) {
+  return __float2bfloat16(tanhf(__bfloat162float(x)));
+}
+__device__ inline bfloat16 FN_BF16(pow)(bfloat16 a, bfloat16 b) {
+  return __float2bfloat16(powf(__bfloat162float(a), __bfloat162float(b)));
+}
+
+// ===============================================================
 // Warp Shuffle Functions (used by reduce operators)
 // ===============================================================
 #define FN_SHUFFLE(func) cinn_custom_device_##func
