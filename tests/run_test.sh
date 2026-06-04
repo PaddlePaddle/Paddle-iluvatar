@@ -107,6 +107,9 @@ cd unittest_runner
 # Run test_runner.py with specified parameters
 python test_runner.py --path ../Paddle/test/legacy_test/ --skip-float64 --disabled-file ../tests/disabled_test.txt --rerun-failed
 
+# Run Device API compat tests for custom device support
+python -m pytest ../Paddle/test/compat/test_device_apis.py -x -v
+
 # Check if failed_logs directory has any log files
 if [ -d "failed_logs" ] && [ "$(ls -A failed_logs)" ]; then
     echo "Failed tests found in CI. Displaying all failure logs:"
