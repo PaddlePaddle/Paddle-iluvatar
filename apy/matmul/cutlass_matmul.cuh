@@ -47,7 +47,6 @@
 
 #include "default_config_id.h"
 #include "params.h"
-#include "helper.h"
 
 #define CHECK_CUTLASS(status)                                             \
   {                                                                       \
@@ -132,7 +131,7 @@ void MatmulAddVariadic(
   constexpr int AlignC = AlignB;
 
   using LayoutA = cutlass::layout::RowMajor;
-  using LayoutB = cutlass::layout::ColumnMajor;
+  using LayoutB = cutlass::layout::RowMajor;
   using LayoutC = cutlass::layout::RowMajor;
   using LayoutD = cutlass::layout::RowMajor;
 
@@ -213,10 +212,10 @@ void MatmulAddVariadic(
   using SmemLayoutAtomA = IX11::Layout_SME_I_16x512b_Atom<IX11::SMESwizzle::Row16b, ElementA, IX11::Major::K>;
   using SmemCopyA = Copy_Atom<UniversalCopy<uint32_t>, ElementA>;
 
-  using CopyB_Op = IX11_SME_I_16x512b<IX11::SMESwizzle::Col, IX11::CacheOP::CacheAll>;
+  using CopyB_Op = IX11_SME_I_16x512b<IX11::SMESwizzle::Row16b, IX11::CacheOP::CacheAll>;
   using CopyB_Atom = Copy_Atom<Copy_Traits<CopyB_Op>, ElementB>;
-  using CopyB = decltype(make_tiled_copy(CopyB_Atom{0}, Layout<Shape<_16,_1>>{}, Layout<Shape<_16,_32>,Stride<_1,_16>>{}));
-  using SmemLayoutAtomB = IX11::Layout_SME_I_16x512b_Atom<IX11::SMESwizzle::Col, ElementB, IX11::Major::K>;
+  using CopyB = decltype(make_tiled_copy(CopyB_Atom{0}, Layout<Shape<_8,_2>>{}, Layout<Shape<_32,_16>,Stride<_1,_32>>{}));
+  using SmemLayoutAtomB = IX11::Layout_SME_I_16x512b_Atom<IX11::SMESwizzle::Row16b, ElementB, IX11::Major::MN>;
   using SmemCopyB = Copy_Atom<UniversalCopy<uint32_t>, ElementB>;
 
   using CollectiveMainloop = cutlass::gemm::collective::CollectiveMma<
@@ -263,33 +262,16 @@ void MatmulAddVariadic(
   epilogue_op_args.variadic_args = variadic_args;
 
   int m = params.m, n = params.n, k = params.k, l = params.batch_count;
-  
+  int size_l_B = params.shape_args.batch_stride_B == 0 ? 0 : l;
+
   auto stride_A = cutlass::make_cute_packed_stride(StrideA{}, cute::make_shape(m, k, l));
-  auto stride_B = cutlass::make_cute_packed_stride(StrideB{}, cute::make_shape(n, k, l));
+  auto stride_B = cutlass::make_cute_packed_stride(StrideB{}, cute::make_shape(n, k, size_l_B));
   auto stride_D = cutlass::make_cute_packed_stride(StrideD{}, cute::make_shape(m, n, l));
 
-  cudaStream_t* stream_ptr = reinterpret_cast<cudaStream_t*>(params.stream_ptr);
-
-  cutlass::device_memory::allocation<ElementB> packed_weight(
-      static_cast<size_t>(l) * n * k);
-  cudaError_t pack_status = LaunchPackBRowMajorToColumnMajor(
-      weight,
-      packed_weight.get(),
-      k,
-      n,
-      l,
-      params.shape_args.batch_stride_B,
-      *stream_ptr);
-  if (pack_status != cudaSuccess) {
-    std::cerr << "PackBRowMajorToColumnMajorKernel failed: "
-              << cudaGetErrorString(pack_status) << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
   typename Gemm::Arguments arguments{
-    GetGemmMode(l),
+    cutlass::gemm::GemmUniversalMode::kGemm,
     problem_shape,
-    {input, stride_A, packed_weight.get(), stride_B},
+    {input, stride_A, weight, stride_B},
     {epilogue_op_args, output, stride_D},
     hw_info
   };
@@ -298,6 +280,8 @@ void MatmulAddVariadic(
 
   size_t workspace_size = Gemm::get_workspace_size(arguments);
   cutlass::device_memory::allocation<uint8_t> workspace(workspace_size);
+
+  cudaStream_t* stream_ptr = reinterpret_cast<cudaStream_t*>(params.stream_ptr);
 
   CHECK_CUTLASS(device_gemm.can_implement(arguments));
   CHECK_CUTLASS(device_gemm.initialize(arguments, workspace.get(), *stream_ptr));
