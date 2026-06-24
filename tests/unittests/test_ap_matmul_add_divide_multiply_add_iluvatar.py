@@ -97,17 +97,18 @@ class TestMatmulAddDivideMultiplyAdd(unittest.TestCase):
             "pd_op.ap_variadic" in generated_pir_program
         ), "AP fusion failed, none pd_op.ap_variadic found in the pir_program."
 
-    def check_by_profiler(self, fused_foo, foo_args):
+    def check_by_profiler(self, fn, input_args, warmup_iters=10, repeate_iters=100):
+        for _ in range(warmup_iters):
+            _ = fn(*input_args)
         paddle.device.synchronize()
 
-        iters = 10
         with profiler.Profiler(
-            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.CUSTOM_DEVICE],
             on_trace_ready=profiler.export_chrome_tracing("./profiler_log"),
             timer_only=False,
         ) as prof:
-            for _ in range(iters):
-                _ = fused_foo(*foo_args)
+            for _ in range(repeate_iters):
+                _ = fn(*input_args)
                 prof.step()
         prof.summary(
             sorted_by=profiler.SortedKeys.GPUTotal,
@@ -128,6 +129,7 @@ class TestMatmulAddDivideMultiplyAdd(unittest.TestCase):
         )
 
         self.check_if_ap_variadic_exist(fused_foo, foo_args)
+        self.check_by_profiler(foo, foo_args)
         self.check_by_profiler(fused_foo, foo_args)
 
         ap_outs = fused_foo(*foo_args)
