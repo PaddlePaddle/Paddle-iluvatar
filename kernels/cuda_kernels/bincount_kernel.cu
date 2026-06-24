@@ -91,6 +91,49 @@ __global__ void KernelBincount(const InputT* input,
   }
 }
 
+// Shared-memory bincount: each block accumulates into shared memory,
+// then one thread per block atomically merges to global output.
+// This reduces global atomic contention from num_elements to num_bins * num_blocks.
+template <typename T, typename InputT, typename OutT>
+__global__ void KernelBincountShared(const InputT* input,
+                                     const int64_t total_elements,
+                                     const bool has_weights,
+                                     const T* weights,
+                                     OutT* output,
+                                     const int64_t output_size) {
+  extern __shared__ int8_t shared_bins_raw[];
+  OutT* shared_bins = reinterpret_cast<OutT*>(shared_bins_raw);
+
+  // Initialize shared memory bins to zero.
+  for (int64_t i = threadIdx.x; i < output_size; i += blockDim.x) {
+    shared_bins[i] = 0;
+  }
+  __syncthreads();
+
+  // Each thread processes input elements and adds to shared memory.
+  int64_t global_tid = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  int64_t stride = static_cast<int64_t>(gridDim.x) * blockDim.x;
+  for (int64_t i = global_tid; i < total_elements; i += stride) {
+    InputT index = input[i];
+    if (index >= 0 && index < output_size) {
+      if (!has_weights) {
+        phi::CudaAtomicAdd(&shared_bins[index], OutT(1));
+      } else {
+        phi::CudaAtomicAdd(&shared_bins[index], static_cast<OutT>(weights[i]));
+      }
+    }
+  }
+  __syncthreads();
+
+  // Merge shared memory bins to global output (one thread per bin).
+  for (int64_t i = threadIdx.x; i < output_size; i += blockDim.x) {
+    OutT val = shared_bins[i];
+    if (val != 0) {
+      phi::CudaAtomicAdd(&output[i], val);
+    }
+  }
+}
+
 template <typename Context, typename T, typename InputT>
 void BincountCUDAInner(const Context& dev_ctx,
                        const DenseTensor& x,
@@ -151,22 +194,45 @@ void BincountCUDAInner(const Context& dev_ctx,
   const T* weights_data = has_weights ? weights->data<T>() : nullptr;
   auto stream = dev_ctx.stream();
 
+  // Max shared memory (48 KB). Used by shared-memory bincount kernel.
+  constexpr int64_t kMaxSharedBytes = 49152;
+
   if (!has_weights) {
     int64_t* output_data = dev_ctx.template Alloc<int64_t>(output);
     funcs::SetConstant<Context, int64_t>()(
         dev_ctx, output, static_cast<int64_t>(0));
 
-    KernelBincount<T, InputT, int64_t>
-        <<<num_blocks, PADDLE_CUDA_NUM_THREADS, 0, stream>>>(
-            input_data, input_numel, has_weights, weights_data, output_data);
+    // Use shared-memory kernel when output fits in 48 KB shared memory.
+    int64_t shared_bytes = output_size * static_cast<int64_t>(sizeof(int64_t));
+    if (shared_bytes <= kMaxSharedBytes && shared_bytes > 0) {
+      int64_t smem_blocks = std::min(num_blocks, static_cast<int64_t>(64));
+      KernelBincountShared<T, InputT, int64_t>
+          <<<smem_blocks, PADDLE_CUDA_NUM_THREADS, shared_bytes, stream>>>(
+              input_data, input_numel, has_weights, weights_data,
+              output_data, output_size);
+    } else {
+      KernelBincount<T, InputT, int64_t>
+          <<<num_blocks, PADDLE_CUDA_NUM_THREADS, 0, stream>>>(
+              input_data, input_numel, has_weights, weights_data, output_data);
+    }
   } else {
     float* output_data = dev_ctx.template Alloc<float>(output);
     funcs::SetConstant<Context, float>()(
         dev_ctx, output, static_cast<float>(0));
 
-    KernelBincount<T, InputT, float>
-        <<<num_blocks, PADDLE_CUDA_NUM_THREADS, 0, stream>>>(
-            input_data, input_numel, has_weights, weights_data, output_data);
+    // Use shared-memory kernel when output fits in 48 KB shared memory.
+    int64_t shared_bytes = output_size * static_cast<int64_t>(sizeof(float));
+    if (shared_bytes <= kMaxSharedBytes && shared_bytes > 0) {
+      int64_t smem_blocks = std::min(num_blocks, static_cast<int64_t>(64));
+      KernelBincountShared<T, InputT, float>
+          <<<smem_blocks, PADDLE_CUDA_NUM_THREADS, shared_bytes, stream>>>(
+              input_data, input_numel, has_weights, weights_data,
+              output_data, output_size);
+    } else {
+      KernelBincount<T, InputT, float>
+          <<<num_blocks, PADDLE_CUDA_NUM_THREADS, 0, stream>>>(
+              input_data, input_numel, has_weights, weights_data, output_data);
+    }
   }
 }
 
